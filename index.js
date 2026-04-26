@@ -11,7 +11,7 @@ const path = require('path');
 // アナウンス実行者（追加・削除可能）
 // ==============================
 const ANNOUNCE_ALLOWED_USERS = [
-  '1088369918069715024','936419559165026304'
+  '1088369918069715024',
 ];
 
 // ==============================
@@ -175,6 +175,9 @@ client.once('ready', async () => {
     new SlashCommandBuilder()
       .setName('alarm')
       .setDescription('アラームを設定します（最大3つ・毎日繰り返し）'),
+    new SlashCommandBuilder()
+      .setName('clearalarm')
+      .setDescription('アラームをすべて解除します'),
   ];
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -271,6 +274,21 @@ client.on('interactionCreate', async (interaction) => {
     saveSticky();
 
     await interaction.reply({ content: '✅ 常駐アナウンスを解除しました。', ephemeral: true });
+    return;
+  }
+
+  // /clearalarm
+  if (interaction.isChatInputCommand() && interaction.commandName === 'clearalarm') {
+    const hasPermission = ANNOUNCE_ALLOWED_USERS.includes(interaction.user.id);
+    if (!hasPermission) {
+      await interaction.reply({ content: '❌ このコマンドを使用する権限がありません。', ephemeral: true });
+      return;
+    }
+
+    clearAlarmTimers();
+    saveAlarm(null);
+
+    await interaction.reply({ content: '✅ アラームをすべて解除しました。', ephemeral: true });
     return;
   }
 
