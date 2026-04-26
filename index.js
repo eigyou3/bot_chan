@@ -157,9 +157,12 @@ client.on('interactionCreate', async (interaction) => {
 
     // Botがリアクションを押す
     try {
-      await posted.react(emoji);
+      // 絵文字の余分な空白・異体字セレクタを除去
+      const cleanEmoji = emoji.replace(/️/g, '').trim();
+      await posted.react(cleanEmoji);
     } catch (e) {
       console.warn('絵文字のリアクション失敗:', e.message);
+      console.warn('入力された絵文字:', [...emoji].map(c => c.codePointAt(0).toString(16)).join(' '));
     }
 
     // ロールが指定されていれば記録
