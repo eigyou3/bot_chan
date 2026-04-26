@@ -150,9 +150,9 @@ client.on('interactionCreate', async (interaction) => {
 
     const emojiInput = new TextInputBuilder()
       .setCustomId('announce_emoji')
-      .setLabel('投稿につけたい絵文字（例: ✅ 👍）')
+      .setLabel('投稿につけたい絵文字（省略可）')
       .setStyle(TextInputStyle.Short)
-      .setRequired(true);
+      .setRequired(false);
 
     modal.addComponents(
       new ActionRowBuilder().addComponents(textInput),
@@ -224,11 +224,13 @@ client.on('interactionCreate', async (interaction) => {
     const posted = await interaction.channel.send({ embeds: [embed] });
 
     // Botがリアクションを押す
-    try {
-      await posted.react(cleanEmoji);
-    } catch (e) {
-      console.warn('絵文字のリアクション失敗:', e.message);
-      console.warn('入力された絵文字:', [...emoji].map(c => c.codePointAt(0).toString(16)).join(' '));
+    if (cleanEmoji) {
+      try {
+        await posted.react(cleanEmoji);
+      } catch (e) {
+        console.warn('絵文字のリアクション失敗:', e.message);
+        console.warn('入力された絵文字:', [...emoji].map(c => c.codePointAt(0).toString(16)).join(' '));
+      }
     }
 
     // 常駐情報を保存
@@ -269,10 +271,12 @@ client.on('messageCreate', async (message) => {
   const posted = await message.channel.send({ embeds: [reEmbed] });
 
   // リアクションを押す
-  try {
-    await posted.react(sticky.emoji);
-  } catch (e) {
-    console.warn('再投稿リアクション失敗:', e.message);
+  if (sticky.emoji) {
+    try {
+      await posted.react(sticky.emoji);
+    } catch (e) {
+      console.warn('再投稿リアクション失敗:', e.message);
+    }
   }
 
   // reactionRoleMapを更新
