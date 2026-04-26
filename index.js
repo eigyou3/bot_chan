@@ -10,7 +10,7 @@ const path = require('path');
 // ==============================
 // アナウンス実行者（追加・削除可能）
 // ==============================
-const ANNOUNCE_ALLOWED_ROLES = [
+const ANNOUNCE_ALLOWED_USERS = [
   '1088369918069715024',
 ];
 
@@ -105,7 +105,7 @@ client.on('interactionCreate', async (interaction) => {
   // /announce
   if (interaction.isChatInputCommand() && interaction.commandName === 'announce') {
     // 権限チェック
-    const hasRole = interaction.member.roles.cache.some(r => ANNOUNCE_ALLOWED_ROLES.includes(r.id));
+    const hasRole = ANNOUNCE_ALLOWED_USERS.includes(interaction.user.id);
     if (!hasRole) {
       await interaction.reply({ content: '❌ このコマンドを使用する権限がありません。', ephemeral: true });
       return;
