@@ -56,6 +56,67 @@ function saveSticky() {
 }
 
 // ==============================
+// アラーム管理
+// ==============================
+let alarmTimers = [];
+
+function loadAlarm() {
+  const config = loadConfig();
+  return config.alarm || null;
+}
+
+function saveAlarm(data) {
+  const config = loadConfig();
+  config.alarm = data;
+  saveConfig(config);
+}
+
+function clearAlarmTimers() {
+  alarmTimers.forEach(t => clearTimeout(t));
+  alarmTimers = [];
+}
+
+function scheduleAlarms(alarmData) {
+  clearAlarmTimers();
+  if (!alarmData) return;
+
+  const { times, text, channelId } = alarmData;
+
+  times.forEach(timeStr => {
+    function scheduleNext() {
+      const now = new Date();
+      const [h, m] = timeStr.split(':').map(Number);
+      // JSTをUTCに変換（JST = UTC+9）
+      const utcH = (h - 9 + 24) % 24;
+      const next = new Date();
+      next.setUTCHours(utcH, m, 0, 0);
+      if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
+      const delay = next - now;
+
+      const timer = setTimeout(async () => {
+        try {
+          const channel = await client.channels.fetch(channelId);
+          if (channel) {
+            const embed = new EmbedBuilder()
+              .setColor('#5865F2')
+              .setDescription(text)
+              .setTimestamp();
+            await channel.send({ embeds: [embed] });
+          }
+        } catch (e) {
+          console.error('アラーム送信失敗:', e.message);
+        }
+        scheduleNext(); // 翌日も繰り返す
+      }, delay);
+
+      alarmTimers.push(timer);
+      console.log(`⏰ アラーム設定: ${timeStr} (${Math.round(delay/1000/60)}分後)`);
+    }
+    scheduleNext();
+  });
+}
+
+// ==============================
 // Discord クライアント
 // ==============================
 const client = new Client({
@@ -75,6 +136,13 @@ const client = new Client({
 client.once('ready', async () => {
   console.log(`✅ Bot起動: ${client.user.tag}`);
   loadSticky();
+
+  // アラーム復元
+  const alarmData = loadAlarm();
+  if (alarmData) {
+    scheduleAlarms(alarmData);
+    console.log(`✅ アラーム復元: ${alarmData.times.join(', ')}`);
+  }
 
   const commands = [
     new SlashCommandBuilder()
@@ -96,6 +164,17 @@ client.once('ready', async () => {
     new SlashCommandBuilder()
       .setName('clearannounce')
       .setDescription('常駐アナウンスを解除・削除します'),
+    new SlashCommandBuilder()
+      .setName('setalarmchannel')
+      .setDescription('アラーム通知先チャンネルを設定します')
+      .addChannelOption(opt =>
+        opt.setName('channel')
+          .setDescription('通知先チャンネル')
+          .setRequired(true)
+      ),
+    new SlashCommandBuilder()
+      .setName('alarm')
+      .setDescription('アラームを設定します（最大3つ・毎日繰り返し）'),
   ];
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -192,6 +271,103 @@ client.on('interactionCreate', async (interaction) => {
     saveSticky();
 
     await interaction.reply({ content: '✅ 常駐アナウンスを解除しました。', ephemeral: true });
+    return;
+  }
+
+  // /setalarmchannel
+  if (interaction.isChatInputCommand() && interaction.commandName === 'setalarmchannel') {
+    const hasPermission = ANNOUNCE_ALLOWED_USERS.includes(interaction.user.id);
+    if (!hasPermission) {
+      await interaction.reply({ content: '❌ このコマンドを使用する権限がありません。', ephemeral: true });
+      return;
+    }
+    const channel = interaction.options.getChannel('channel');
+    const config = loadConfig();
+    config.alarmChannelId = channel.id;
+    saveConfig(config);
+    await interaction.reply({
+      content: `✅ アラームチャンネルを <#${channel.id}> に設定しました！`,
+      ephemeral: true
+    });
+    return;
+  }
+
+  // /alarm
+  if (interaction.isChatInputCommand() && interaction.commandName === 'alarm') {
+    const hasPermission = ANNOUNCE_ALLOWED_USERS.includes(interaction.user.id);
+    if (!hasPermission) {
+      await interaction.reply({ content: '❌ このコマンドを使用する権限がありません。', ephemeral: true });
+      return;
+    }
+
+    const modal = new ModalBuilder()
+      .setCustomId('alarm_modal')
+      .setTitle('アラーム設定');
+
+    const textInput = new TextInputBuilder()
+      .setCustomId('alarm_text')
+      .setLabel('通知テキスト（全アラーム共通）')
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true);
+
+    const time1Input = new TextInputBuilder()
+      .setCustomId('alarm_time1')
+      .setLabel('時間1（例: 09:00）')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+
+    const time2Input = new TextInputBuilder()
+      .setCustomId('alarm_time2')
+      .setLabel('時間2（省略可）')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(false);
+
+    const time3Input = new TextInputBuilder()
+      .setCustomId('alarm_time3')
+      .setLabel('時間3（省略可）')
+      .setStyle(TextInputStyle.Short)
+      .setRequired(false);
+
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(time1Input),
+      new ActionRowBuilder().addComponents(time2Input),
+      new ActionRowBuilder().addComponents(time3Input),
+      new ActionRowBuilder().addComponents(textInput),
+    );
+
+    await interaction.showModal(modal);
+    return;
+  }
+
+  // アラームモーダル送信
+  if (interaction.isModalSubmit() && interaction.customId === 'alarm_modal') {
+    const text = interaction.fields.getTextInputValue('alarm_text').trim();
+    const t1 = interaction.fields.getTextInputValue('alarm_time1').trim();
+    const t2 = interaction.fields.getTextInputValue('alarm_time2').trim();
+    const t3 = interaction.fields.getTextInputValue('alarm_time3').trim();
+
+    const times = [t1, t2, t3].filter(t => t && /^\d{1,2}:\d{2}$/.test(t));
+
+    if (times.length === 0) {
+      await interaction.reply({ content: '❌ 有効な時間が入力されていません。例: 09:00', ephemeral: true });
+      return;
+    }
+
+    const config = loadConfig();
+    if (!config.alarmChannelId) {
+      await interaction.reply({ content: '❌ 先に /setalarmchannel でチャンネルを設定してください。', ephemeral: true });
+      return;
+    }
+
+    const alarmData = { times, text, channelId: config.alarmChannelId };
+    saveAlarm(alarmData);
+    scheduleAlarms(alarmData);
+
+    await interaction.reply({
+      content: `✅ アラームを設定しました！
+⏰ ${times.join(' / ')} に毎日通知します。`,
+      ephemeral: true
+    });
     return;
   }
 
