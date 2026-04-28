@@ -56,37 +56,38 @@ function saveSticky() {
 }
 
 // ==============================
-// アラーム管理
+// アラーム管理（guildIdごとに管理）
 // ==============================
-let alarmTimers = [];
+const alarmTimersMap = new Map(); // guildId: [timers]
 
-function loadAlarm() {
+function loadAlarms() {
   const config = loadConfig();
-  return config.alarm || null;
+  return config.alarms || {};
 }
 
-function saveAlarm(data) {
+function saveAlarms(alarms) {
   const config = loadConfig();
-  config.alarm = data;
+  config.alarms = alarms;
   saveConfig(config);
 }
 
-function clearAlarmTimers() {
-  alarmTimers.forEach(t => clearTimeout(t));
-  alarmTimers = [];
+function clearAlarmTimers(guildId) {
+  const timers = alarmTimersMap.get(guildId) || [];
+  timers.forEach(t => clearTimeout(t));
+  alarmTimersMap.set(guildId, []);
 }
 
-function scheduleAlarms(alarmData) {
-  clearAlarmTimers();
+function scheduleAlarms(guildId, alarmData) {
+  clearAlarmTimers(guildId);
   if (!alarmData) return;
 
   const { times, text, channelId } = alarmData;
+  const timers = [];
 
   times.forEach(timeStr => {
     function scheduleNext() {
       const now = new Date();
       const [h, m] = timeStr.split(':').map(Number);
-      // JSTをUTCに変換（JST = UTC+9）
       const utcH = (h - 9 + 24) % 24;
       const next = new Date();
       next.setUTCHours(utcH, m, 0, 0);
@@ -106,14 +107,16 @@ function scheduleAlarms(alarmData) {
         } catch (e) {
           console.error('アラーム送信失敗:', e.message);
         }
-        scheduleNext(); // 翌日も繰り返す
+        scheduleNext();
       }, delay);
 
-      alarmTimers.push(timer);
-      console.log(`⏰ アラーム設定: ${timeStr} (${Math.round(delay/1000/60)}分後)`);
+      timers.push(timer);
+      console.log(`⏰ [${guildId}] アラーム設定: ${timeStr} (${Math.round(delay/1000/60)}分後)`);
     }
     scheduleNext();
   });
+
+  alarmTimersMap.set(guildId, timers);
 }
 
 // ==============================
@@ -137,11 +140,11 @@ client.once('ready', async () => {
   console.log(`✅ Bot起動: ${client.user.tag}`);
   loadSticky();
 
-  // アラーム復元
-  const alarmData = loadAlarm();
-  if (alarmData) {
-    scheduleAlarms(alarmData);
-    console.log(`✅ アラーム復元: ${alarmData.times.join(', ')}`);
+  // アラーム復元（全サーバー）
+  const alarms = loadAlarms();
+  for (const [guildId, alarmData] of Object.entries(alarms)) {
+    scheduleAlarms(guildId, alarmData);
+    console.log(`✅ アラーム復元 [${guildId}]: ${alarmData.times.join(', ')}`);
   }
 
   const commands = [
@@ -177,7 +180,7 @@ client.once('ready', async () => {
       .setDescription('アラームを設定します（最大3つ・毎日繰り返し）'),
     new SlashCommandBuilder()
       .setName('clearalarm')
-      .setDescription('アラームをすべて解除します'),
+      .setDescription('このサーバーのアラームをすべて解除します'),
   ];
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -201,7 +204,8 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isChatInputCommand() && interaction.commandName === 'setchannel') {
     const channel = interaction.options.getChannel('channel');
     const config = loadConfig();
-    config.vcNotifyChannelId = channel.id;
+    if (!config.vcNotify) config.vcNotify = {};
+    config.vcNotify[interaction.guildId] = channel.id;
     saveConfig(config);
     await interaction.reply({
       content: `✅ VC通知チャンネルを <#${channel.id}> に設定しました！`,
@@ -261,7 +265,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // 古いメッセージを削除
     try {
       const oldMsg = await interaction.channel.messages.fetch(sticky.messageId);
       await oldMsg.delete();
@@ -285,10 +288,14 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    clearAlarmTimers();
-    saveAlarm(null);
+    const guildId = interaction.guildId;
+    clearAlarmTimers(guildId);
 
-    await interaction.reply({ content: '✅ アラームをすべて解除しました。', ephemeral: true });
+    const alarms = loadAlarms();
+    delete alarms[guildId];
+    saveAlarms(alarms);
+
+    await interaction.reply({ content: '✅ このサーバーのアラームをすべて解除しました。', ephemeral: true });
     return;
   }
 
@@ -301,7 +308,8 @@ client.on('interactionCreate', async (interaction) => {
     }
     const channel = interaction.options.getChannel('channel');
     const config = loadConfig();
-    config.alarmChannelId = channel.id;
+    if (!config.alarmChannel) config.alarmChannel = {};
+    config.alarmChannel[interaction.guildId] = channel.id;
     saveConfig(config);
     await interaction.reply({
       content: `✅ アラームチャンネルを <#${channel.id}> に設定しました！`,
@@ -322,12 +330,6 @@ client.on('interactionCreate', async (interaction) => {
       .setCustomId('alarm_modal')
       .setTitle('アラーム設定');
 
-    const textInput = new TextInputBuilder()
-      .setCustomId('alarm_text')
-      .setLabel('通知テキスト（全アラーム共通）')
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(true);
-
     const time1Input = new TextInputBuilder()
       .setCustomId('alarm_time1')
       .setLabel('時間1（例: 09:00）')
@@ -345,6 +347,12 @@ client.on('interactionCreate', async (interaction) => {
       .setLabel('時間3（省略可）')
       .setStyle(TextInputStyle.Short)
       .setRequired(false);
+
+    const textInput = new TextInputBuilder()
+      .setCustomId('alarm_text')
+      .setLabel('通知テキスト（全アラーム共通）')
+      .setStyle(TextInputStyle.Paragraph)
+      .setRequired(true);
 
     modal.addComponents(
       new ActionRowBuilder().addComponents(time1Input),
@@ -372,24 +380,28 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     const config = loadConfig();
-    if (!config.alarmChannelId) {
+    const guildId = interaction.guildId;
+    const channelId = config.alarmChannel?.[guildId];
+
+    if (!channelId) {
       await interaction.reply({ content: '❌ 先に /setalarmchannel でチャンネルを設定してください。', ephemeral: true });
       return;
     }
 
-    const alarmData = { times, text, channelId: config.alarmChannelId };
-    saveAlarm(alarmData);
-    scheduleAlarms(alarmData);
+    const alarmData = { times, text, channelId };
+    const alarms = loadAlarms();
+    alarms[guildId] = alarmData;
+    saveAlarms(alarms);
+    scheduleAlarms(guildId, alarmData);
 
     await interaction.reply({
-      content: `✅ アラームを設定しました！
-⏰ ${times.join(' / ')} に毎日通知します。`,
+      content: `✅ アラームを設定しました！\n⏰ ${times.join(' / ')} に毎日通知します。`,
       ephemeral: true
     });
     return;
   }
 
-  // モーダル送信
+  // アナウンスモーダル送信
   if (interaction.isModalSubmit() && interaction.customId.startsWith('announce_modal:')) {
     const roleId = interaction.customId.split(':')[1];
     const text = interaction.fields.getTextInputValue('announce_text');
@@ -402,7 +414,6 @@ client.on('interactionCreate', async (interaction) => {
 
     await interaction.reply({ content: '✅ 投稿しました！', ephemeral: true });
 
-    // 既存の常駐アナウンスがあれば削除
     const channelId = interaction.channelId;
     const existing = stickyMap.get(channelId);
     if (existing) {
@@ -417,7 +428,6 @@ client.on('interactionCreate', async (interaction) => {
 
     const posted = await interaction.channel.send({ embeds: [embed] });
 
-    // Botがリアクションを押す
     if (cleanEmoji) {
       try {
         await posted.react(cleanEmoji);
@@ -427,11 +437,9 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
 
-    // 常駐情報を保存
     stickyMap.set(channelId, { messageId: posted.id, text, emoji: cleanEmoji, roleId });
     saveSticky();
 
-    // ロールが指定されていれば記録
     if (roleId !== 'none') {
       reactionRoleMap.set(posted.id, { emoji: cleanEmoji, roleId });
     }
@@ -450,7 +458,6 @@ client.on('messageCreate', async (message) => {
   const sticky = stickyMap.get(channelId);
   if (!sticky) return;
 
-  // 古いメッセージを削除
   try {
     const oldMsg = await message.channel.messages.fetch(sticky.messageId);
     await oldMsg.delete();
@@ -458,13 +465,11 @@ client.on('messageCreate', async (message) => {
     console.warn('古い常駐メッセージ削除失敗:', e.message);
   }
 
-  // 再投稿
   const reEmbed = new EmbedBuilder()
     .setColor('#5865F2')
     .setDescription(sticky.text);
   const posted = await message.channel.send({ embeds: [reEmbed] });
 
-  // リアクションを押す
   if (sticky.emoji) {
     try {
       await posted.react(sticky.emoji);
@@ -473,13 +478,11 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // reactionRoleMapを更新
   if (sticky.roleId !== 'none') {
     reactionRoleMap.delete(sticky.messageId);
     reactionRoleMap.set(posted.id, { emoji: sticky.emoji, roleId: sticky.roleId });
   }
 
-  // stickyMapのmessageIdを更新
   stickyMap.set(channelId, { ...sticky, messageId: posted.id });
   saveSticky();
 });
@@ -521,9 +524,10 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
   if (!vcChannel || vcChannel.members.size !== 1) return;
 
   const config = loadConfig();
-  if (!config.vcNotifyChannelId) return;
+  const vcNotifyChannelId = config.vcNotify?.[newState.guild.id];
+  if (!vcNotifyChannelId) return;
 
-  const notifyChannel = newState.guild.channels.cache.get(config.vcNotifyChannelId);
+  const notifyChannel = newState.guild.channels.cache.get(vcNotifyChannelId);
   if (!notifyChannel) return;
 
   const member = newState.member;
