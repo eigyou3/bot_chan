@@ -1,3 +1,5 @@
+const http = require('http');
+
 const {
   Client, GatewayIntentBits, EmbedBuilder,
   REST, Routes, SlashCommandBuilder,
