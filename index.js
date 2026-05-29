@@ -540,7 +540,15 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     .setDescription(`<@${member.id}> が通話を始めました！\n気軽に参加してね！`)
     .setTimestamp();
 
-  await notifyChannel.send({ embeds: [embed] });
+  const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+  const vcRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setLabel('通話に参加する')
+      .setStyle(ButtonStyle.Link)
+      .setURL(`https://discord.com/channels/${newState.guild.id}/${newState.channelId}`)
+  );
+
+  await notifyChannel.send({ embeds: [embed], components: [vcRow] });
 });
 
 // ダミーHTTPサーバー（Render無料枠用）
