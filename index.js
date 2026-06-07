@@ -32,6 +32,9 @@ try {
 // ==============================
 // ウェルカム設定
 // ==============================
+const WELCOME_ALLOWED_GUILDS = [
+  '1496054346385723472',
+];
 const WELCOME_NOTIFY_ROLE_ID = '1496147336043298866';
 const WELCOME_BG_OPACITY = 0.15;
 const DEFAULT_WELCOME_MESSAGE = 'ご来場お待ちしておりました。\n担当スタッフがすぐにご案内いたします。';
@@ -229,29 +232,43 @@ client.on('interactionCreate', async (interaction) => {
       .setCustomId('welcome_modal')
       .setTitle('来場者情報を入力');
 
+    // サーバー制限チェック
+    if (!WELCOME_ALLOWED_GUILDS.includes(interaction.guildId)) {
+      await interaction.reply({ content: '❌ このサーバーでは使用できません。', ephemeral: true });
+      return;
+    }
+
     modal.addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
-          .setCustomId('guest1')
-          .setLabel('来場者1（例: 4/25 10:00 斉藤様）')
+          .setCustomId('date')
+          .setLabel('日付（例: 6/7）')
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder('日付 時間 お名前')
+          .setPlaceholder('月/日')
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('guest1')
+          .setLabel('来場者1　時間　お名前（例: 10:00 斉藤様）')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('時間 お名前')
           .setRequired(true)
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId('guest2')
-          .setLabel('来場者2（省略可）')
+          .setLabel('来場者2　時間　お名前（省略可）')
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder('日付 時間 お名前')
+          .setPlaceholder('時間 お名前')
           .setRequired(false)
       ),
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
           .setCustomId('guest3')
-          .setLabel('来場者3（省略可）')
+          .setLabel('来場者3　時間　お名前（省略可）')
           .setStyle(TextInputStyle.Short)
-          .setPlaceholder('日付 時間 お名前')
+          .setPlaceholder('時間 お名前')
           .setRequired(false)
       ),
       new ActionRowBuilder().addComponents(
@@ -259,7 +276,7 @@ client.on('interactionCreate', async (interaction) => {
           .setCustomId('welcome_msg')
           .setLabel('ウェルカムメッセージ（省略可）')
           .setStyle(TextInputStyle.Paragraph)
-          .setPlaceholder('空欄の場合はデフォルトのメッセージを使用')
+          .setPlaceholder('ご来場お待ちしておりました。\n担当スタッフがすぐにご案内いたします。')
           .setRequired(false)
       ),
     );
@@ -272,21 +289,31 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isModalSubmit() && interaction.customId === 'welcome_modal') {
     await interaction.deferReply();
 
+    const dateRaw = interaction.fields.getTextInputValue('date').trim();
     const raw1 = interaction.fields.getTextInputValue('guest1').trim();
     const raw2 = interaction.fields.getTextInputValue('guest2').trim();
     const raw3 = interaction.fields.getTextInputValue('guest3').trim();
     const msgInput = interaction.fields.getTextInputValue('welcome_msg').trim();
     const welcomeMessage = msgInput || DEFAULT_WELCOME_MESSAGE;
 
+    const date = parseDate(dateRaw);
+    if (!date) {
+      await interaction.editReply('⚠️ 日付を正しく入力してください。例: `6/7`');
+      return;
+    }
+
     const guests = [];
     for (const raw of [raw1, raw2, raw3]) {
       if (!raw) continue;
-      const parsed = parseGuest(raw);
-      if (parsed) guests.push(parsed);
+      const parsed = parseTimeAndName(raw);
+      if (parsed) guests.push({ date, ...parsed });
     }
 
+    // 時間順に並べ替え（早い順）
+    guests.sort((a, b) => a.time.localeCompare(b.time));
+
     if (guests.length === 0) {
-      await interaction.editReply('⚠️ 来場者情報を正しく入力してください。例: `4/25 10:00 斉藤様`');
+      await interaction.editReply('⚠️ 来場者情報を正しく入力してください。例: `10:00 斉藤様`');
       return;
     }
 
@@ -670,6 +697,35 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 // ==============================
 // ウェルカム画像テキストパース
 // ==============================
+function parseDate(text) {
+  const normalized = text
+    .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+    .replace(/[／]/g, '/').replace(/[：]/g, ':').replace(/　/g, ' ').trim();
+  const m = normalized.match(/(\d{1,2})[\/月](\d{1,2})(?:日)?/);
+  if (!m) return null;
+  return `${parseInt(m[1])}/${parseInt(m[2])}`;
+}
+
+function parseTimeAndName(text) {
+  const normalized = text
+    .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+    .replace(/[：]/g, ':').replace(/　/g, ' ').trim();
+  const timeMatch = normalized.match(/(\d{1,2}):(\d{2})|(\d{1,2})時(\d{2})?(?:分)?/);
+  const nameMatch = normalized.match(/([^\s\d:/時分]+(?:様|さん))/);
+  if (!nameMatch) return null;
+  let hour = '00', minute = '00';
+  if (timeMatch) {
+    if (timeMatch[1] !== undefined) {
+      hour = timeMatch[1].padStart(2, '0');
+      minute = timeMatch[2].padStart(2, '0');
+    } else {
+      hour = timeMatch[3].padStart(2, '0');
+      minute = (timeMatch[4] || '00').padStart(2, '0');
+    }
+  }
+  return { time: `${hour}:${minute}`, name: nameMatch[1] };
+}
+
 function parseGuest(text) {
   const normalized = text
     .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
@@ -747,43 +803,74 @@ async function generateWelcomeImage({ guests, welcomeMessage }, W = 1920, H = 10
 
   const guestCount = guests.length;
 
+  // 共通日付（最初のゲストの日付）
+  const sharedDate = guests[0].date;
+
+  // 日付を上部に表示
+  ctx.font = `100 ${pt(26)}px "${THIN}"`;
+  ctx.fillStyle = '#606060';
+  ctx.fillText(sharedDate, cx, 340);
+
   if (guestCount === 1) {
-    ctx.font = `100 ${pt(32)}px "${THIN}"`;
-    ctx.fillStyle = '#404040';
-    ctx.fillText(`${guests[0].date}　${guests[0].time}`, cx, 400);
+    // 1組：中央
+    ctx.font = `100 ${pt(28)}px "${THIN}"`;
+    ctx.fillStyle = '#606060';
+    ctx.fillText(guests[0].time, cx, 420);
     ctx.font = `100 ${pt(56)}px "${THIN}"`;
+    ctx.fillStyle = '#404040';
     ctx.fillText(guests[0].name, cx, 510);
+
   } else if (guestCount === 2) {
+    // 2組：左右
     const col1 = Math.round(W * 0.28);
     const col2 = Math.round(W * 0.72);
+    ctx.fillStyle = '#606060';
+    ctx.font = `100 ${pt(24)}px "${THIN}"`;
+    ctx.fillText(guests[0].time, col1, 420);
+    ctx.font = `100 ${pt(44)}px "${THIN}"`;
     ctx.fillStyle = '#404040';
+    ctx.fillText(guests[0].name, col1, 500);
     ctx.font = `100 ${pt(24)}px "${THIN}"`;
-    ctx.fillText(`${guests[0].date}　${guests[0].time}`, col1, 390);
+    ctx.fillStyle = '#606060';
+    ctx.fillText(guests[1].time, col2, 420);
     ctx.font = `100 ${pt(44)}px "${THIN}"`;
-    ctx.fillText(guests[0].name, col1, 470);
-    ctx.font = `100 ${pt(24)}px "${THIN}"`;
-    ctx.fillText(`${guests[1].date}　${guests[1].time}`, col2, 390);
-    ctx.font = `100 ${pt(44)}px "${THIN}"`;
-    ctx.fillText(guests[1].name, col2, 470);
+    ctx.fillStyle = '#404040';
+    ctx.fillText(guests[1].name, col2, 500);
+    // 縦線
     ctx.strokeStyle = '#E0E0E0';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(cx, 360);
-    ctx.lineTo(cx, 510);
+    ctx.moveTo(cx, 380);
+    ctx.lineTo(cx, 530);
     ctx.stroke();
+
   } else {
-    const startY = 360, gap = 90;
+    // 3組：3分割
+    const col1 = Math.round(W * 0.2);
+    const col2 = cx;
+    const col3 = Math.round(W * 0.8);
+    const cols = [col1, col2, col3];
     guests.forEach((g, i) => {
-      ctx.font = `100 ${pt(20)}px "${THIN}"`;
+      ctx.font = `100 ${pt(22)}px "${THIN}"`;
       ctx.fillStyle = '#606060';
-      ctx.fillText(`${g.date}　${g.time}`, cx, startY + i * gap);
-      ctx.font = `100 ${pt(36)}px "${THIN}"`;
+      ctx.fillText(g.time, cols[i], 420);
+      ctx.font = `100 ${pt(38)}px "${THIN}"`;
       ctx.fillStyle = '#404040';
-      ctx.fillText(g.name, cx, startY + i * gap + 46);
+      ctx.fillText(g.name, cols[i], 500);
+    });
+    // 縦線2本
+    ctx.strokeStyle = '#E0E0E0';
+    ctx.lineWidth = 1;
+    [Math.round(W*0.4), Math.round(W*0.6)].forEach(x => {
+      ctx.beginPath();
+      ctx.moveTo(x, 380);
+      ctx.lineTo(x, 530);
+      ctx.stroke();
     });
   }
 
-  const msgY = guestCount === 3 ? 680 : 620;
+  // ウェルカムメッセージ（下部固定）
+  const msgY = 840;
   ctx.font = `100 ${pt(22)}px "${THIN}"`;
   ctx.fillStyle = '#404040';
   const lines = welcomeMessage.split('\n');
