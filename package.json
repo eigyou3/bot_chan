@@ -1,12 +1,14 @@
 {
   "name": "vc-notify-bot",
   "version": "1.0.0",
-  "description": "VC通知 Discord Bot",
+  "description": "VC通知・アナウンス・アラーム・ウェルカム画像 Discord Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
+    "@fontsource/noto-sans-jp": "^5.2.9",
+    "@napi-rs/canvas": "^0.1.99",
     "discord.js": "^14.15.3"
   },
   "engines": {
