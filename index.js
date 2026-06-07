@@ -1,7 +1,8 @@
 const http = require('http');
+const { createCanvas, GlobalFonts, loadImage } = require('@napi-rs/canvas');
 
 const {
-  Client, GatewayIntentBits, EmbedBuilder,
+  Client, GatewayIntentBits, EmbedBuilder, AttachmentBuilder,
   REST, Routes, SlashCommandBuilder,
   ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder,
   ChannelType
@@ -15,6 +16,25 @@ const path = require('path');
 const ANNOUNCE_ALLOWED_USERS = [
   '1088369918069715024','936419559165026304'
 ];
+
+// ==============================
+// フォント登録（ウェルカム画像用）
+// ==============================
+const fontBase = require('path').join(__dirname, 'node_modules', '@fontsource', 'noto-sans-jp', 'files');
+try {
+  GlobalFonts.registerFromPath(require('path').join(fontBase, 'noto-sans-jp-japanese-900-normal.woff'), 'NotoSansJP-Black');
+  GlobalFonts.registerFromPath(require('path').join(fontBase, 'noto-sans-jp-japanese-100-normal.woff'), 'NotoSansJP-Thin');
+  console.log('✅ フォント読み込み成功');
+} catch (e) {
+  console.warn('⚠️ フォント読み込み失敗:', e.message);
+}
+
+// ==============================
+// ウェルカム設定
+// ==============================
+const WELCOME_NOTIFY_ROLE_ID = '1496147336043298866';
+const WELCOME_BG_OPACITY = 0.15;
+const DEFAULT_WELCOME_MESSAGE = 'ご来場お待ちしておりました。\n担当スタッフがすぐにご案内いたします。';
 
 // ==============================
 // チャンネル設定の保存・読み込み
@@ -180,6 +200,9 @@ client.once('ready', async () => {
     new SlashCommandBuilder()
       .setName('clearalarm')
       .setDescription('アラームをすべて解除します'),
+    new SlashCommandBuilder()
+      .setName('welcome')
+      .setDescription('来場者ウェルカム画像を生成します'),
   ];
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -198,6 +221,98 @@ client.once('ready', async () => {
 // インタラクション処理
 // ==============================
 client.on('interactionCreate', async (interaction) => {
+
+
+  // /welcome → モーダル表示
+  if (interaction.isChatInputCommand() && interaction.commandName === 'welcome') {
+    const modal = new ModalBuilder()
+      .setCustomId('welcome_modal')
+      .setTitle('来場者情報を入力');
+
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('guest1')
+          .setLabel('来場者1（例: 4/25 10:00 斉藤様）')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('日付 時間 お名前')
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('guest2')
+          .setLabel('来場者2（省略可）')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('日付 時間 お名前')
+          .setRequired(false)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('guest3')
+          .setLabel('来場者3（省略可）')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('日付 時間 お名前')
+          .setRequired(false)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('welcome_msg')
+          .setLabel('ウェルカムメッセージ（省略可）')
+          .setStyle(TextInputStyle.Paragraph)
+          .setPlaceholder('空欄の場合はデフォルトのメッセージを使用')
+          .setRequired(false)
+      ),
+    );
+
+    await interaction.showModal(modal);
+    return;
+  }
+
+  // ウェルカムモーダル送信
+  if (interaction.isModalSubmit() && interaction.customId === 'welcome_modal') {
+    await interaction.deferReply();
+
+    const raw1 = interaction.fields.getTextInputValue('guest1').trim();
+    const raw2 = interaction.fields.getTextInputValue('guest2').trim();
+    const raw3 = interaction.fields.getTextInputValue('guest3').trim();
+    const msgInput = interaction.fields.getTextInputValue('welcome_msg').trim();
+    const welcomeMessage = msgInput || DEFAULT_WELCOME_MESSAGE;
+
+    const guests = [];
+    for (const raw of [raw1, raw2, raw3]) {
+      if (!raw) continue;
+      const parsed = parseGuest(raw);
+      if (parsed) guests.push(parsed);
+    }
+
+    if (guests.length === 0) {
+      await interaction.editReply('⚠️ 来場者情報を正しく入力してください。例: `4/25 10:00 斉藤様`');
+      return;
+    }
+
+    try {
+      const buffer = await generateWelcomeImage({ guests, welcomeMessage }, 1920, 1080);
+      const file = new AttachmentBuilder(buffer, { name: 'welcome.jpg' });
+      const member = interaction.member;
+      const roleColor = member?.roles?.color?.hexColor ?? '#808080';
+      const names = guests.map(g => g.name).join('・');
+
+      const embed = new EmbedBuilder()
+        .setColor(roleColor)
+        .setDescription(
+          `<@${interaction.user.id}> !\n` +
+          `${names}のウェルカムを作成したよ！\n\n` +
+          `<@&${WELCOME_NOTIFY_ROLE_ID}> みんなにも共有しておくね！`
+        )
+        .setImage('attachment://welcome.jpg');
+
+      await interaction.editReply({ embeds: [embed], files: [file] });
+    } catch (err) {
+      console.error(err);
+      await interaction.editReply('❌ 画像生成中にエラーが発生しました');
+    }
+    return;
+  }
 
   // /setchannel
   if (interaction.isChatInputCommand() && interaction.commandName === 'setchannel') {
@@ -550,6 +665,135 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
   await notifyChannel.send({ embeds: [embed], components: [vcRow] });
 });
+
+
+// ==============================
+// ウェルカム画像テキストパース
+// ==============================
+function parseGuest(text) {
+  const normalized = text
+    .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+    .replace(/[／]/g, '/')
+    .replace(/[：]/g, ':')
+    .replace(/　/g, ' ')
+    .trim();
+
+  const dateMatch = normalized.match(/(\d{1,2})[\/月](\d{1,2})(?:日)?/);
+  const timeMatch = normalized.match(/(\d{1,2}):(\d{2})|(\d{1,2})時(\d{2})?(?:分)?/);
+  const nameMatch = normalized.match(/([^\s\d:/月日時分]+(?:様|さん))/);
+
+  if (!dateMatch || !nameMatch) return null;
+
+  const month = parseInt(dateMatch[1]);
+  const day   = parseInt(dateMatch[2]);
+  let hour = '00', minute = '00';
+
+  if (timeMatch) {
+    if (timeMatch[1] !== undefined) {
+      hour   = timeMatch[1].padStart(2, '0');
+      minute = timeMatch[2].padStart(2, '0');
+    } else {
+      hour   = timeMatch[3].padStart(2, '0');
+      minute = (timeMatch[4] || '00').padStart(2, '0');
+    }
+  }
+
+  return { date: `${month}/${day}`, time: `${hour}:${minute}`, name: nameMatch[1] };
+}
+
+// ==============================
+// ウェルカム画像生成
+// ==============================
+async function generateWelcomeImage({ guests, welcomeMessage }, W = 1920, H = 1080) {
+  const SCALE = 2;
+  const canvas = createCanvas(W * SCALE, H * SCALE);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(SCALE, SCALE);
+  ctx.antialias = 'subpixel';
+  ctx.patternQuality = 'best';
+  ctx.quality = 'best';
+  ctx.textDrawingMode = 'path';
+
+  const BLACK = 'NotoSansJP-Black';
+  const THIN  = 'NotoSansJP-Thin';
+  const pt = v => Math.round(v * 96 / 72);
+  const cx = Math.round(W / 2);
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.strokeStyle = '#CCCCCC';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(Math.round(W*0.021), Math.round(H*0.037), Math.round(W*0.958), Math.round(H*0.926));
+
+  ctx.strokeStyle = '#E8E8E8';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(Math.round(W*0.029), Math.round(H*0.052), Math.round(W*0.942), Math.round(H*0.896));
+
+  try {
+    const bgImg = await loadImage(require('path').join(__dirname, 'bg.png'));
+    ctx.globalAlpha = WELCOME_BG_OPACITY;
+    ctx.drawImage(bgImg, 0, 0, W, H);
+    ctx.globalAlpha = 1.0;
+  } catch (e) {
+    console.warn('bg.png読み込みスキップ:', e.message);
+  }
+
+  ctx.textAlign = 'center';
+  ctx.font = `900 ${pt(80)}px "${BLACK}"`;
+  ctx.fillStyle = 'rgba(64,64,64,0.50)';
+  ctx.fillText('Welcome', cx + 6, 280);
+  ctx.fillText('Welcome', cx, 280);
+
+  const guestCount = guests.length;
+
+  if (guestCount === 1) {
+    ctx.font = `100 ${pt(32)}px "${THIN}"`;
+    ctx.fillStyle = '#404040';
+    ctx.fillText(`${guests[0].date}　${guests[0].time}`, cx, 400);
+    ctx.font = `100 ${pt(56)}px "${THIN}"`;
+    ctx.fillText(guests[0].name, cx, 510);
+  } else if (guestCount === 2) {
+    const col1 = Math.round(W * 0.28);
+    const col2 = Math.round(W * 0.72);
+    ctx.fillStyle = '#404040';
+    ctx.font = `100 ${pt(24)}px "${THIN}"`;
+    ctx.fillText(`${guests[0].date}　${guests[0].time}`, col1, 390);
+    ctx.font = `100 ${pt(44)}px "${THIN}"`;
+    ctx.fillText(guests[0].name, col1, 470);
+    ctx.font = `100 ${pt(24)}px "${THIN}"`;
+    ctx.fillText(`${guests[1].date}　${guests[1].time}`, col2, 390);
+    ctx.font = `100 ${pt(44)}px "${THIN}"`;
+    ctx.fillText(guests[1].name, col2, 470);
+    ctx.strokeStyle = '#E0E0E0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx, 360);
+    ctx.lineTo(cx, 510);
+    ctx.stroke();
+  } else {
+    const startY = 360, gap = 90;
+    guests.forEach((g, i) => {
+      ctx.font = `100 ${pt(20)}px "${THIN}"`;
+      ctx.fillStyle = '#606060';
+      ctx.fillText(`${g.date}　${g.time}`, cx, startY + i * gap);
+      ctx.font = `100 ${pt(36)}px "${THIN}"`;
+      ctx.fillStyle = '#404040';
+      ctx.fillText(g.name, cx, startY + i * gap + 46);
+    });
+  }
+
+  const msgY = guestCount === 3 ? 680 : 620;
+  ctx.font = `100 ${pt(22)}px "${THIN}"`;
+  ctx.fillStyle = '#404040';
+  const lines = welcomeMessage.split('\n');
+  const lineH = pt(16) * 1.9;
+  lines.forEach((line, i) => {
+    ctx.fillText(line, cx, msgY + i * lineH);
+  });
+
+  return canvas.toBuffer('image/jpeg', { quality: 1.0 });
+}
 
 // ダミーHTTPサーバー（Render無料枠用）
 const PORT = process.env.PORT || 3000;
