@@ -233,6 +233,7 @@ client.on('interactionCreate', async (interaction) => {
 
   // /welcome → モーダル表示
   if (interaction.isChatInputCommand() && interaction.commandName === 'welcome') {
+    console.log('welcome command received, guild:', interaction.guildId);
     // サーバー制限チェック
     if (!WELCOME_ALLOWED_GUILDS.includes(interaction.guildId)) {
       await interaction.reply({ content: '❌ このサーバーでは使用できません。', ephemeral: true });
@@ -286,7 +287,9 @@ client.on('interactionCreate', async (interaction) => {
       ),
     );
 
+    console.log('showing modal...');
     await interaction.showModal(modal);
+    console.log('modal shown');
     return;
   }
 
