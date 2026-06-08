@@ -21,9 +21,11 @@ const ANNOUNCE_ALLOWED_USERS = [
 // フォント登録（ウェルカム画像用）
 // ==============================
 const fontBase = require('path').join(__dirname, 'node_modules', '@fontsource', 'noto-sans-jp', 'files');
+const serifBase = require('path').join(__dirname, 'node_modules', '@fontsource', 'noto-serif-jp', 'files');
 try {
   GlobalFonts.registerFromPath(require('path').join(fontBase, 'noto-sans-jp-japanese-900-normal.woff'), 'NotoSansJP-Black');
   GlobalFonts.registerFromPath(require('path').join(fontBase, 'noto-sans-jp-japanese-100-normal.woff'), 'NotoSansJP-Thin');
+  GlobalFonts.registerFromPath(require('path').join(serifBase, 'noto-serif-jp-japanese-900-normal.woff'), 'NotoSerifJP-Black');
   console.log('✅ フォント読み込み成功');
 } catch (e) {
   console.warn('⚠️ フォント読み込み失敗:', e.message);
@@ -703,27 +705,52 @@ function parseDate(text) {
     .replace(/[／]/g, '/').replace(/[：]/g, ':').replace(/　/g, ' ').trim();
   const m = normalized.match(/(\d{1,2})[\/月](\d{1,2})(?:日)?/);
   if (!m) return null;
-  return `${parseInt(m[1])}/${parseInt(m[2])}`;
+  const year = new Date().getFullYear();
+  const month = String(parseInt(m[1])).padStart(2, '0');
+  const day = String(parseInt(m[2])).padStart(2, '0');
+  return `${year}.${month}.${day}`;
 }
 
 function parseTimeAndName(text) {
+  // 全角→半角、スペース統一
   const normalized = text
     .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
-    .replace(/[：]/g, ':').replace(/　/g, ' ').trim();
-  const timeMatch = normalized.match(/(\d{1,2}):(\d{2})|(\d{1,2})時(\d{2})?(?:分)?/);
-  const nameMatch = normalized.match(/([^\s\d:/時分]+(?:様|さん))/);
-  if (!nameMatch) return null;
+    .replace(/[：]/g, ':')
+    .replace(/[　 ]+/g, ' ')
+    .trim();
+
+  // 時間パース（12:00 / 12時00分 / 12時 / 1200 対応）
   let hour = '00', minute = '00';
+  const timeMatch = normalized.match(/(\d{1,2}):(\d{2})/) ||
+                    normalized.match(/(\d{1,2})時(\d{2})?(?:分)?/) ||
+                    normalized.match(/^(\d{2})(\d{2})(?=\s)/);
   if (timeMatch) {
-    if (timeMatch[1] !== undefined) {
+    if (timeMatch[0].includes(':')) {
       hour = timeMatch[1].padStart(2, '0');
       minute = timeMatch[2].padStart(2, '0');
+    } else if (timeMatch[0].includes('時')) {
+      hour = timeMatch[1].padStart(2, '0');
+      minute = (timeMatch[2] || '00').padStart(2, '0');
     } else {
-      hour = timeMatch[3].padStart(2, '0');
-      minute = (timeMatch[4] || '00').padStart(2, '0');
+      hour = timeMatch[1].padStart(2, '0');
+      minute = timeMatch[2].padStart(2, '0');
     }
   }
-  return { time: `${hour}:${minute}`, name: nameMatch[1] };
+
+  // 名前パース（時間部分を除いた残り）
+  const withoutTime = normalized
+    .replace(/(\d{1,2}):(\d{2})/, '')
+    .replace(/(\d{1,2})時(\d{2})?(?:分)?/, '')
+    .replace(/^\d{4}\s/, '')
+    .trim();
+
+  if (!withoutTime) return null;
+
+  // 様・さん の処理（なければ様を付与、重複しない）
+  let name = withoutTime.replace(/さん$/, '様');
+  if (!name.endsWith('様')) name += '様';
+
+  return { time: `${hour}:${minute}`, name };
 }
 
 function parseGuest(text) {
@@ -846,9 +873,9 @@ async function generateWelcomeImage({ guests, welcomeMessage }, W = 1920, H = 10
 
   } else {
     // 3組：3分割
-    const col1 = Math.round(W * 0.2);
+    const col1 = Math.round(W * 0.25);
     const col2 = cx;
-    const col3 = Math.round(W * 0.8);
+    const col3 = Math.round(W * 0.75);
     const cols = [col1, col2, col3];
     guests.forEach((g, i) => {
       ctx.font = `100 ${pt(22)}px "${THIN}"`;
