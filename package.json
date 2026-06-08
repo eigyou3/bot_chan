@@ -8,7 +8,6 @@
   },
   "dependencies": {
     "@fontsource/noto-sans-jp": "^5.2.9",
-    "@fontsource/noto-serif-jp": "^5.2.9",
     "@napi-rs/canvas": "^0.1.99",
     "discord.js": "^14.15.3"
   },
