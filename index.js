@@ -160,6 +160,11 @@ const client = new Client({
 // ==============================
 // スラッシュコマンド登録
 // ==============================
+// 未処理エラーでクラッシュしないように
+client.on('error', (err) => {
+  console.error('Discord client error:', err.message);
+});
+
 client.once('ready', async () => {
   console.log(`✅ Bot起動: ${client.user.tag}`);
   loadSticky();
@@ -289,7 +294,7 @@ client.on('interactionCreate', async (interaction) => {
 
   // ウェルカムモーダル送信
   if (interaction.isModalSubmit() && interaction.customId === 'welcome_modal') {
-    await interaction.deferReply();
+    try { await interaction.deferReply(); } catch { return; }
 
     const dateRaw = interaction.fields.getTextInputValue('date').trim();
     const raw1 = interaction.fields.getTextInputValue('guest1').trim();
