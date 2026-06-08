@@ -233,15 +233,15 @@ client.on('interactionCreate', async (interaction) => {
 
   // /welcome → モーダル表示
   if (interaction.isChatInputCommand() && interaction.commandName === 'welcome') {
-    const modal = new ModalBuilder()
-      .setCustomId('welcome_modal')
-      .setTitle('来場者情報を入力');
-
     // サーバー制限チェック
     if (!WELCOME_ALLOWED_GUILDS.includes(interaction.guildId)) {
       await interaction.reply({ content: '❌ このサーバーでは使用できません。', ephemeral: true });
       return;
     }
+
+    const modal = new ModalBuilder()
+      .setCustomId('welcome_modal')
+      .setTitle('来場者情報を入力');
 
     modal.addComponents(
       new ActionRowBuilder().addComponents(
