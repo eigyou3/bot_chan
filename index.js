@@ -21,11 +21,9 @@ const ANNOUNCE_ALLOWED_USERS = [
 // フォント登録（ウェルカム画像用）
 // ==============================
 const fontBase = require('path').join(__dirname, 'node_modules', '@fontsource', 'noto-sans-jp', 'files');
-const serifBase = require('path').join(__dirname, 'node_modules', '@fontsource', 'noto-serif-jp', 'files');
 try {
   GlobalFonts.registerFromPath(require('path').join(fontBase, 'noto-sans-jp-japanese-900-normal.woff'), 'NotoSansJP-Black');
   GlobalFonts.registerFromPath(require('path').join(fontBase, 'noto-sans-jp-japanese-100-normal.woff'), 'NotoSansJP-Thin');
-  GlobalFonts.registerFromPath(require('path').join(serifBase, 'noto-serif-jp-japanese-900-normal.woff'), 'NotoSerifJP-Black');
   console.log('✅ フォント読み込み成功');
 } catch (e) {
   console.warn('⚠️ フォント読み込み失敗:', e.message);
