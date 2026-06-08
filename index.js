@@ -229,6 +229,7 @@ client.once('ready', async () => {
 // インタラクション処理
 // ==============================
 client.on('interactionCreate', async (interaction) => {
+  console.log('interaction type:', interaction.type, interaction.customId ?? interaction.commandName ?? '');
 
 
   // /welcome → モーダル表示
