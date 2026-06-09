@@ -1,8 +1,7 @@
 const http = require('http');
-const { createCanvas, GlobalFonts, loadImage } = require('@napi-rs/canvas');
 
 const {
-  Client, GatewayIntentBits, EmbedBuilder, AttachmentBuilder,
+  Client, GatewayIntentBits, EmbedBuilder,
   REST, Routes, SlashCommandBuilder,
   ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder,
   ChannelType
@@ -16,26 +15,6 @@ const path = require('path');
 const ANNOUNCE_ALLOWED_USERS = [
   '1088369918069715024','936419559165026304'
 ];
-
-// ==============================
-// フォント登録（ウェルカム画像用）
-// ==============================
-const fontBase = path.join(__dirname, 'node_modules', '@fontsource', 'noto-sans-jp', 'files');
-try {
-  GlobalFonts.registerFromPath(path.join(fontBase, 'noto-sans-jp-japanese-900-normal.woff'), 'NotoSansJP-Black');
-  GlobalFonts.registerFromPath(path.join(fontBase, 'noto-sans-jp-japanese-100-normal.woff'), 'NotoSansJP-Thin');
-  console.log('✅ フォント読み込み成功');
-} catch (e) {
-  console.warn('⚠️ フォント読み込み失敗:', e.message);
-}
-
-// ==============================
-// ウェルカム設定
-// ==============================
-const WELCOME_NOTIFY_ROLE_ID = '1496147336043298866';
-const WELCOME_BG_OPACITY = 0.15;
-const WELCOME_ALLOWED_GUILDS = ['1496054346385723472'];
-const DEFAULT_WELCOME_MESSAGE = 'ご来場お待ちしておりました。\n担当スタッフがすぐにご案内いたします。';
 
 // ==============================
 // チャンネル設定の保存・読み込み
@@ -153,8 +132,6 @@ const client = new Client({
   ],
 });
 
-client.on('error', (err) => { console.error('Discord error:', err.message); });
-
 // ==============================
 // スラッシュコマンド登録
 // ==============================
@@ -203,9 +180,6 @@ client.once('ready', async () => {
     new SlashCommandBuilder()
       .setName('clearalarm')
       .setDescription('アラームをすべて解除します'),
-    new SlashCommandBuilder()
-      .setName('welcome')
-      .setDescription('来場者ウェルカム画像を生成します'),
   ];
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -224,76 +198,6 @@ client.once('ready', async () => {
 // インタラクション処理
 // ==============================
 client.on('interactionCreate', async (interaction) => {
-
-
-  // /welcome
-  if (interaction.isChatInputCommand() && interaction.commandName === 'welcome') {
-    if (!WELCOME_ALLOWED_GUILDS.includes(interaction.guildId)) {
-      await interaction.reply({ content: '❌ このサーバーでは使用できません。', ephemeral: true });
-      return;
-    }
-
-    const modal = new ModalBuilder()
-      .setCustomId('welcome_modal')
-      .setTitle('来場者情報を入力');
-
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId('date').setLabel('日付（例: 6/8）').setStyle(TextInputStyle.Short).setPlaceholder('月/日').setRequired(true)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId('time').setLabel('時間（例: 10:00）').setStyle(TextInputStyle.Short).setPlaceholder('時間').setRequired(true)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId('name').setLabel('お客様名（例: 齋藤）').setStyle(TextInputStyle.Short).setPlaceholder('様は不要です').setRequired(true)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder().setCustomId('welcome_msg').setLabel('ウェルカムメッセージ（省略可）').setStyle(TextInputStyle.Paragraph).setPlaceholder('ご来場お待ちしておりました。\n担当スタッフがすぐにご案内いたします。').setRequired(false)
-      ),
-    );
-
-    await interaction.showModal(modal);
-    return;
-  }
-
-  // ウェルカムモーダル送信
-  if (interaction.isModalSubmit() && interaction.customId === 'welcome_modal') {
-    await interaction.deferReply();
-
-    const dateRaw = interaction.fields.getTextInputValue('date').trim();
-    const timeRaw = interaction.fields.getTextInputValue('time').trim();
-    const nameRaw = interaction.fields.getTextInputValue('name').trim();
-    const msgInput = interaction.fields.getTextInputValue('welcome_msg').trim();
-    const welcomeMessage = msgInput || DEFAULT_WELCOME_MESSAGE;
-
-    const date = parseWelcomeDate(dateRaw);
-    if (!date) { await interaction.editReply('⚠️ 日付を正しく入力してください。例: `6/8`'); return; }
-
-    const time = parseWelcomeTime(timeRaw);
-    const name = formatWelcomeName(nameRaw);
-
-    try {
-      const buffer = await generateWelcomeImage({ date, time, name, welcomeMessage }, 1920, 1080);
-      const file = new AttachmentBuilder(buffer, { name: 'welcome.jpg' });
-      const member = interaction.member;
-      const roleColor = member?.roles?.color?.hexColor ?? '#808080';
-
-      const embed = new EmbedBuilder()
-        .setColor(roleColor)
-        .setDescription(
-          `<@${interaction.user.id}> !\n` +
-          `${name}のウェルカムを作成したよ！\n\n` +
-          `<@&${WELCOME_NOTIFY_ROLE_ID}> みんなにも共有しておくね！`
-        )
-        .setImage('attachment://welcome.jpg');
-
-      await interaction.editReply({ embeds: [embed], files: [file] });
-    } catch (err) {
-      console.error(err);
-      await interaction.editReply('❌ 画像生成中にエラーが発生しました').catch(() => {});
-    }
-    return;
-  }
 
   // /setchannel
   if (interaction.isChatInputCommand() && interaction.commandName === 'setchannel') {
@@ -646,97 +550,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
   await notifyChannel.send({ embeds: [embed], components: [vcRow] });
 });
-
-
-// ==============================
-// ウェルカム画像生成
-// ==============================
-function parseWelcomeDate(text) {
-  const n = text.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[／]/g, '/').trim();
-  const m = n.match(/(\d{1,2})[\/月](\d{1,2})(?:日)?/);
-  if (!m) return null;
-  const year = new Date().getFullYear();
-  return `${year}.${String(parseInt(m[1])).padStart(2,'0')}.${String(parseInt(m[2])).padStart(2,'0')}`;
-}
-
-function parseWelcomeTime(text) {
-  const n = text.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[：]/g, ':').trim();
-  const m = n.match(/(\d{1,2}):(\d{2})/) || n.match(/(\d{1,2})時(\d{2})?(?:分)?/);
-  if (!m) return '00:00';
-  if (m[0].includes(':')) return `${m[1].padStart(2,'0')}:${m[2].padStart(2,'0')}`;
-  return `${m[1].padStart(2,'0')}:${(m[2]||'00').padStart(2,'0')}`;
-}
-
-function formatWelcomeName(name) {
-  let n = name.trim().replace(/さん$/, '様');
-  if (!n.endsWith('様')) n += '様';
-  return n;
-}
-
-async function generateWelcomeImage({ date, time, name, welcomeMessage }, W = 1920, H = 1080) {
-  const SCALE = 2;
-  const canvas = createCanvas(W * SCALE, H * SCALE);
-  const ctx = canvas.getContext('2d');
-  ctx.scale(SCALE, SCALE);
-  ctx.antialias = 'subpixel';
-  ctx.patternQuality = 'best';
-  ctx.quality = 'best';
-  ctx.textDrawingMode = 'path';
-
-  const THIN = 'NotoSansJP-Thin';
-  const pt = v => Math.round(v * 96 / 72);
-  const cx = Math.round(W / 2);
-
-  // 背景
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, W, H);
-
-  // 外枠
-  ctx.strokeStyle = '#CCCCCC';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(Math.round(W*0.021), Math.round(H*0.037), Math.round(W*0.958), Math.round(H*0.926));
-
-  // 内枠
-  ctx.strokeStyle = '#E8E8E8';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(Math.round(W*0.029), Math.round(H*0.052), Math.round(W*0.942), Math.round(H*0.896));
-
-  // 背景画像
-  try {
-    const bgImg = await loadImage(path.join(__dirname, 'bg.png'));
-    ctx.globalAlpha = WELCOME_BG_OPACITY;
-    ctx.drawImage(bgImg, 0, 0, W, H);
-    ctx.globalAlpha = 1.0;
-  } catch (e) {}
-
-  ctx.textAlign = 'center';
-
-  // 日付
-  ctx.font = `100 ${pt(26)}px "${THIN}"`;
-  ctx.fillStyle = '#888888';
-  ctx.fillText(date, cx, 320);
-
-  // 時間
-  ctx.font = `100 ${pt(32)}px "${THIN}"`;
-  ctx.fillStyle = '#606060';
-  ctx.fillText(time, cx, 430);
-
-  // 名前
-  ctx.font = `100 ${pt(56)}px "${THIN}"`;
-  ctx.fillStyle = '#404040';
-  ctx.fillText(name, cx, 540);
-
-  // ウェルカムメッセージ（下部固定）
-  ctx.font = `100 ${pt(22)}px "${THIN}"`;
-  ctx.fillStyle = '#404040';
-  const lines = welcomeMessage.split('\n');
-  const lineH = pt(16) * 1.9;
-  lines.forEach((line, i) => {
-    ctx.fillText(line, cx, 840 + i * lineH);
-  });
-
-  return canvas.toBuffer('image/jpeg', { quality: 1.0 });
-}
 
 // ダミーHTTPサーバー（Render無料枠用）
 const PORT = process.env.PORT || 3000;
