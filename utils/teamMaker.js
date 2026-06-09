@@ -1,4 +1,4 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 
 // 戦力数値をパース
 function parsePower(str) {
@@ -18,20 +18,16 @@ function formatPower(v) {
 
 // 募集用Embedの作成
 function buildAnnounceEmbed(data) {
-  const embed = new EmbedBuilder()
+  return new EmbedBuilder()
     .setColor('#5865F2')
     .setTitle('━━ 参戦募集 ━━')
     .setDescription(`集計方法：**${data.sortLabel}**`)
-    .addFields(
-      { 
-        name: `➡️ 参戦メンバー (${data.participants.length}人)`, 
-        value: data.participants.length > 0 
-          ? data.participants.map(p => `${p.name} (戦力: ${p.power})`).join('\n') 
-          : 'なし' 
-      }
-    );
-
-  return embed;
+    .addFields({
+      name: `➡️ 参戦メンバー (${data.participants.length}人)`,
+      value: data.participants.length > 0
+        ? data.participants.map(p => `${p.name}┃${formatPower(p.power)}┃${p.job}`).join('\n')
+        : 'なし'
+    });
 }
 
 // チーム分けロジック
