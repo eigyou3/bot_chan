@@ -1,4 +1,14 @@
-const { SlashCommandBuilder, EmbedBuilder, ChannelType } = require('discord.js');
+const { 
+  SlashCommandBuilder, 
+  EmbedBuilder, 
+  ChannelType, 
+  ActionRowBuilder, 
+  ButtonBuilder, 
+  ButtonStyle, 
+  ModalBuilder, 
+  TextInputBuilder, 
+  TextInputStyle 
+} = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
@@ -22,18 +32,15 @@ function parseTimeToMs(timeStr) {
   const minutes = parseInt(match[2], 10);
 
   const now = new Date();
-  // RenderのタイムゾーンがUTCの場合を考慮し、日本時間(JST)で計算
   const jstNow = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
   
   const target = new Date(jstNow);
   target.setHours(hours, minutes, 0, 0);
 
-  // もし指定された時刻がすでに過ぎている場合は翌日のその時刻にする
   if (target.getTime() <= jstNow.getTime()) {
     target.setDate(target.getDate() + 1);
   }
 
-  // 現実の時間（UTC/ローカル）の差分に直して、実行までのミリ秒を割り出す
   const diffMs = target.getTime() - jstNow.getTime();
   return Date.now() + diffMs;
 }
@@ -42,25 +49,19 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('admin')
     .setDescription('管理用コマンド')
+    // アナウンスコマンド（極限までシンプルに）
     .addSubcommand(sub =>
       sub.setName('announce')
-        .setDescription('リアクション付きアナウンスを送信')
-        .addStringOption(o => o.setName('text').setDescription('案内文章（\\nで改行）').setRequired(true))
-        .addStringOption(o => o.setName('emoji').setDescription('リアクション絵文字').setRequired(true))
-        .addRoleOption(o => o.setName('role').setDescription('付与するロール').setRequired(true))
+        .setDescription('ロール付与ボタン付きのアナウンスを送信（文章はポップアップで入力）')
+        .addRoleOption(o => o.setName('role').setDescription('対象のロール').setRequired(true))
+        .addBooleanOption(o => o.setName('sticky').setDescription('最下行に常駐（固定）させるか（デフォルト: いいえ）').setRequired(false))
     )
-    .addSubcommand(sub =>
-      sub.setName('sticky')
-        .setDescription('常駐アナウンスを設定')
-        .addStringOption(o => o.setName('text').setDescription('常駐文章（\\nで改行）').setRequired(true))
-    )
+    // アラームコマンド（入力欄は1つだけ）
     .addSubcommand(sub =>
       sub.setName('alarm')
-        .setDescription('日本時刻でアラームを設定（最大3つ）')
-        .addStringOption(o => o.setName('time1').setDescription('時刻1（例 15:30）').setRequired(true))
+        .setDescription('日本時刻でアラームを設定（複数指定はスペース区切り）')
+        .addStringOption(o => o.setName('times').setDescription('時刻（例: 15:30 21:00 23:00）').setRequired(true))
         .addStringOption(o => o.setName('message').setDescription('通知メッセージ').setRequired(true))
-        .addStringOption(o => o.setName('time2').setDescription('時刻2（任意 例 21:00）').setRequired(false))
-        .addStringOption(o => o.setName('time3').setDescription('時刻3（任意 例 23:45）').setRequired(false))
     )
     .addSubcommand(sub =>
       sub.setName('setvc')
@@ -75,58 +76,41 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
     const config = loadConfig();
 
-    // --- 1. 通常アナウンス ---
+    // --- 1. アナウンス（モーダル ＆ 2色ボタン式） ---
     if (subcommand === 'announce') {
-      const text = interaction.options.getString('text').replace(/\\n/g, '\n');
-      const emoji = interaction.options.getString('emoji');
       const role = interaction.options.getRole('role');
+      const isSticky = interaction.options.getBoolean('sticky') || false;
 
-      const embed = new EmbedBuilder().setColor('#5865F2').setDescription(text);
-      const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
-      await msg.react(emoji);
+      // 文章を入力するポップアップ（モーダル）を作成
+      const modal = new ModalBuilder()
+        .setCustomId(`announce_modal_${role.id}_${isSticky}`)
+        .setTitle('アナウンス内容の入力');
 
-      client.on('messageReactionAdd', async (reaction, user) => {
-        if (user.bot || reaction.message.id !== msg.id) return;
-        if (reaction.emoji.name === emoji || reaction.emoji.id === emoji) {
-          const member = await reaction.message.guild.members.fetch(user.id).catch(() => null);
-          if (member) await member.roles.add(role).catch(() => null);
-        }
-      });
-      return;
+      const textInput = new TextInputBuilder()
+        .setCustomId('announce_text')
+        .setLabel('案内文章（ここで普通に改行できます）')
+        .setStyle(TextInputStyle.Paragraph)
+        .setRequired(true);
+
+      modal.addComponents(new ActionRowBuilder().addComponents(textInput));
+
+      // 画面にモーダルをポンッと出す
+      return await interaction.showModal(modal);
     }
 
-    // --- 2. 常駐アナウンス ---
-    if (subcommand === 'sticky') {
-      const text = interaction.options.getString('text').replace(/\\n/g, '\n');
-      const embed = new EmbedBuilder().setColor('#E67E22').setDescription(text);
-
-      const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
-
-      if (!config.sticky) config.sticky = {};
-      config.sticky[interaction.channelId] = { messageId: msg.id, text };
-      saveConfig(config);
-
-      if (!client.stickyMap) client.stickyMap = new Map();
-      client.stickyMap.set(interaction.channelId, { messageId: msg.id, text });
-      return;
-    }
-
-    // --- 3. アラーム設定（日本時刻版） ---
+    // --- 2. アラーム（1欄に並べるシンプル版） ---
     if (subcommand === 'alarm') {
-      const timeInputs = [
-        interaction.options.getString('time1'),
-        interaction.options.getString('time2'),
-        interaction.options.getString('time3')
-      ].filter(Boolean);
-
+      const timesInput = interaction.options.getString('times');
       const message = interaction.options.getString('message');
+      
+      // スペース（全角・半角）で分割して配列にする
+      const timeInputs = timesInput.split(/[\s ]+/).filter(Boolean);
       const registeredTimes = [];
 
       if (!config.alarms) config.alarms = [];
 
       for (const timeStr of timeInputs) {
         const targetTime = parseTimeToMs(timeStr);
-        
         if (!targetTime) continue;
 
         const alarmData = { time: targetTime, channelId: interaction.channelId, message };
@@ -146,20 +130,19 @@ module.exports = {
       }
 
       if (registeredTimes.length === 0) {
-        return interaction.reply({ content: '❌ 時刻の形式が正しくありません。「15:30」や「9:05」のように入力してください。', ephemeral: true });
+        return interaction.reply({ content: '❌ 時刻の形式が正しくありません。「15:30」や「21:00 23:45」のように入力してください。', ephemeral: true });
       }
 
       return interaction.reply({ 
-        content: `⏰ 以下の時刻にアラームを設定しました（このチャンネルに通知します）。\n設定時刻: ${registeredTimes.map(t => `**${t}**`).join(', ')}`, 
+        content: `⏰ 以下の時刻にアラームを設定しました。\n設定時刻: ${registeredTimes.map(t => `**${t}**`).join(', ')}`, 
         ephemeral: true 
       });
     }
 
-    // --- 4. VC通知先設定（コマンド実行チャンネル自動固定版） ---
+    // --- 3. VC通知先設定 ---
     if (subcommand === 'setvc') {
       config.vcNotifyChannelId = interaction.channelId;
       saveConfig(config);
-
       return interaction.reply({ content: `✅ VC参加の通知先をこのチャンネル（ <#${interaction.channelId}> ）に設定しました。`, ephemeral: true });
     }
   },
