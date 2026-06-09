@@ -12,6 +12,32 @@ function saveConfig(data) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2));
 }
 
+// 時刻文字列（"HH:MM"）を本日のミリ秒に変換するヘルパー
+function parseTimeToMs(timeStr) {
+  if (!timeStr) return null;
+  const match = timeStr.trim().match(/^([0-2]?\d):([0-5]\d)$/);
+  if (!match) return null;
+
+  const hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+
+  const now = new Date();
+  // RenderのタイムゾーンがUTCの場合を考慮し、日本時間(JST)で計算
+  const jstNow = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
+  
+  const target = new Date(jstNow);
+  target.setHours(hours, minutes, 0, 0);
+
+  // もし指定された時刻がすでに過ぎている場合は翌日のその時刻にする
+  if (target.getTime() <= jstNow.getTime()) {
+    target.setDate(target.getDate() + 1);
+  }
+
+  // 現実の時間（UTC/ローカル）の差分に直して、実行までのミリ秒を割り出す
+  const diffMs = target.getTime() - jstNow.getTime();
+  return Date.now() + diffMs;
+}
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('admin')
@@ -30,9 +56,11 @@ module.exports = {
     )
     .addSubcommand(sub =>
       sub.setName('alarm')
-        .setDescription('指定時間後にアラームを設定')
-        .addIntegerOption(o => o.setName('minutes').setDescription('何分後か').setRequired(true))
+        .setDescription('日本時刻でアラームを設定（最大3つ）')
+        .addStringOption(o => o.setName('time1').setDescription('時刻1（例 15:30）').setRequired(true))
         .addStringOption(o => o.setName('message').setDescription('通知メッセージ').setRequired(true))
+        .addStringOption(o => o.setName('time2').setDescription('時刻2（任意 例 21:00）').setRequired(false))
+        .addStringOption(o => o.setName('time3').setDescription('時刻3（任意 例 23:45）').setRequired(false))
     )
     .addSubcommand(sub =>
       sub.setName('setvc')
@@ -58,7 +86,6 @@ module.exports = {
       const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
       await msg.react(emoji);
 
-      // リアクション追加イベント用のリスナー（簡易実装）
       client.on('messageReactionAdd', async (reaction, user) => {
         if (user.bot || reaction.message.id !== msg.id) return;
         if (reaction.emoji.name === emoji || reaction.emoji.id === emoji) {
@@ -85,36 +112,32 @@ module.exports = {
       return;
     }
 
-    // --- 3. アラーム設定 ---
+    // --- 3. アラーム設定（日本時刻版） ---
     if (subcommand === 'alarm') {
-      const minutes = interaction.options.getInteger('minutes');
+      const timeInputs = [
+        interaction.options.getString('time1'),
+        interaction.options.getString('time2'),
+        interaction.options.getString('time3')
+      ].filter(Boolean); // 入力されているものだけに絞る
+
       const message = interaction.options.getString('message');
-      const targetTime = Date.now() + minutes * 60 * 1000;
+      const registeredTimes = [];
 
       if (!config.alarms) config.alarms = [];
-      const alarmData = { time: targetTime, channelId: interaction.channelId, message };
-      config.alarms.push(alarmData);
-      saveConfig(config);
 
-      setTimeout(async () => {
-        const channel = await client.channels.fetch(interaction.channelId).catch(() => null);
-        if (channel) await channel.send(message);
+      for (const timeStr of timeInputs) {
+        const targetTime = parseTimeToMs(timeStr);
+        
+        // 入力形式が不正（例: 26:70 など）ならスキップ
+        if (!targetTime) continue;
 
-        const currentConfig = loadConfig();
-        currentConfig.alarms = (currentConfig.alarms || []).filter(a => a.time !== targetTime);
-        saveConfig(currentConfig);
-      }, minutes * 60 * 1000);
+        const alarmData = { time: targetTime, channelId: interaction.channelId, message };
+        config.alarms.push(alarmData);
+        registeredTimes.push(timeStr);
 
-      return interaction.reply({ content: `⏰ ${minutes}分後にアラームを設定しました。`, ephemeral: true });
-    }
+        // 指定時間までのカウントダウン計算
+        const delay = targetTime - Date.now();
 
-    // --- 4. VC通知先設定 ---
-    if (subcommand === 'setvc') {
-      const channel = interaction.options.getChannel('channel');
-      config.vcNotifyChannelId = channel.id;
-      saveConfig(config);
-
-      return interaction.reply({ content: `✅ VC参加の通知先を <#${channel.id}> に設定しました。`, ephemeral: true });
-    }
-  },
-};
+        setTimeout(async () => {
+          const channel = await client.channels.fetch(interaction.channelId).catch(() => null);
+          if (channel) await channel.send(message);
