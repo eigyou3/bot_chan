@@ -64,8 +64,7 @@ module.exports = {
     )
     .addSubcommand(sub =>
       sub.setName('setvc')
-        .setDescription('VC参加の通知先チャンネルを設定')
-        .addChannelOption(o => o.setName('channel').setDescription('通知先チャンネル').setRequired(true).addChannelTypes(ChannelType.GuildText))
+        .setDescription('このチャンネルをVC参加の通知先に設定します')
     ),
 
   async execute(interaction, client) {
@@ -118,7 +117,7 @@ module.exports = {
         interaction.options.getString('time1'),
         interaction.options.getString('time2'),
         interaction.options.getString('time3')
-      ].filter(Boolean); // 入力されているものだけに絞る
+      ].filter(Boolean);
 
       const message = interaction.options.getString('message');
       const registeredTimes = [];
@@ -128,14 +127,12 @@ module.exports = {
       for (const timeStr of timeInputs) {
         const targetTime = parseTimeToMs(timeStr);
         
-        // 入力形式が不正（例: 26:70 など）ならスキップ
         if (!targetTime) continue;
 
         const alarmData = { time: targetTime, channelId: interaction.channelId, message };
         config.alarms.push(alarmData);
         registeredTimes.push(timeStr);
 
-        // 指定時間までのカウントダウン計算
         const delay = targetTime - Date.now();
 
         setTimeout(async () => {
@@ -158,13 +155,12 @@ module.exports = {
       });
     }
 
-    // --- 4. VC通知先設定 ---
+    // --- 4. VC通知先設定（コマンド実行チャンネル自動固定版） ---
     if (subcommand === 'setvc') {
-      const channel = interaction.options.getChannel('channel');
-      config.vcNotifyChannelId = channel.id;
+      config.vcNotifyChannelId = interaction.channelId;
       saveConfig(config);
 
-      return interaction.reply({ content: `✅ VC参加の通知先を <#${channel.id}> に設定しました。`, ephemeral: true });
+      return interaction.reply({ content: `✅ VC参加の通知先をこのチャンネル（ <#${interaction.channelId}> ）に設定しました。`, ephemeral: true });
     }
   },
 };
