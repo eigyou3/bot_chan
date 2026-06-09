@@ -23,7 +23,7 @@ module.exports = {
     }
 
     if (interaction.isButton()) {
-      // アナウンスボタン
+      // アナウンスボタンの処理
       if (interaction.customId.startsWith('ann_btn_')) {
         const [_, __, action, roleId] = interaction.customId.split('_');
         const role = await interaction.guild.roles.fetch(roleId).catch(() => null);
@@ -39,17 +39,12 @@ module.exports = {
         }
       }
 
-      // マッチングボタン
+      // マッチングボタンの処理
       if (!client.matchingData) client.matchingData = new Map();
       let data = client.matchingData.get(interaction.message.id);
       
-      // データ復元
-      if (!data && interaction.message.embeds.length > 0) {
-        const { parseAnnounceEmbed } = require('../utils/teamMaker');
-        data = parseAnnounceEmbed(interaction.message);
-        if (data) client.matchingData.set(interaction.message.id, data);
-      }
-      if (!data) return interaction.reply({ content: '募集データが見つかりません。', ephemeral: true });
+      // 🛠 クラッシュの原因となっていた不完全な Embed からの復元処理を完全に撤去しました
+      if (!data) return interaction.reply({ content: '募集データが見つかりません。新しくコマンドを実行し直してください。', ephemeral: true });
 
       // 1. 参加
       if (interaction.customId === 'join_match') {
@@ -75,7 +70,9 @@ module.exports = {
       // 3. 戦力変更
       if (interaction.customId === 'edit_power') {
         const participant = data.participants.find(p => p.id === interaction.user.id);
-        if (!participant) return interaction.reply({ content: '参加登録されていません。', ephemeral: true });
+        if (!participant) {
+          return await interaction.reply({ content: '❌ まだ参加登録されていません。「参加する」ボタンから登録してください。', ephemeral: true });
+        }
 
         const modal = new ModalBuilder().setCustomId('modal_match_edit').setTitle('戦力変更');
         modal.addComponents(
@@ -89,9 +86,11 @@ module.exports = {
         if (!ALLOWED_USERS.includes(interaction.user.id)) return interaction.reply({ content: '権限がありません。', ephemeral: true });
         data.sortMethod = data.sortMethod === 'snake' ? 'balance' : 'snake';
         data.sortLabel = data.sortMethod === 'snake' ? 'スネーク方式' : '平均化方式';
+        
         const { buildAnnounceEmbed } = require('../utils/teamMaker');
+        await interaction.deferUpdate();
         await interaction.message.edit({ embeds: [buildAnnounceEmbed(data)] });
-        return await interaction.reply({ content: `集計方法を **${data.sortLabel}** に変更しました。`, ephemeral: true });
+        return;
       }
 
       // 5. 集計（管理者のみ）
@@ -142,7 +141,7 @@ module.exports = {
         }
       }
 
-      // マッチング登録・変更
+      // マッチング登録・変更の反映
       if (interaction.customId === 'modal_match_join' || interaction.customId === 'modal_match_edit') {
         const data = client.matchingData.get(interaction.message.id);
         const rawPower = interaction.fields.getTextInputValue('input_power');
