@@ -22,6 +22,12 @@ module.exports = {
       return;
     }
 
+    if (!client.matchingData) client.matchingData = new Map();
+    if (!client.channelMap) client.channelMap = new Map();
+
+    // ==========================================
+    // ボタンの処理
+    // ==========================================
     if (interaction.isButton()) {
       // アナウンスボタンの処理
       if (interaction.customId.startsWith('ann_btn_')) {
@@ -39,14 +45,14 @@ module.exports = {
         }
       }
 
-      // マッチングボタンの処理
-      if (!client.matchingData) client.matchingData = new Map();
-      // 💡 メッセージIDではなく、チャンネルIDを鍵にしてデータを取得します
-      let data = client.matchingData.get(interaction.channelId);
+      // 💡【修正】元の index.js と同じく、channelMap から大元のメッセージIDを経由してデータを取得します
+      // これにより、メッセージがどれだけ下に送り直されても、大元のデータに確実にアクセスできます
+      const baseMessageId = client.channelMap.get(interaction.channelId) || interaction.message.id;
+      let data = client.matchingData.get(baseMessageId);
       
       if (!data) return interaction.reply({ content: '募集データが見つかりません。新しくコマンドを実行し直してください。', ephemeral: true });
 
-      // 1. 参加
+      // 1. 参加ボタン
       if (interaction.customId === 'join_match') {
         const exists = data.participants.some(p => p.id === interaction.user.id);
         if (exists) return interaction.reply({ content: '既に登録されています。', ephemeral: true });
@@ -59,7 +65,7 @@ module.exports = {
         return await interaction.showModal(modal);
       }
 
-      // 2. 削除
+      // 2. 削除ボタン
       if (interaction.customId === 'leave_match') {
         data.participants = data.participants.filter(p => p.id !== interaction.user.id);
         const { buildAnnounceEmbed } = require('../utils/teamMaker');
@@ -68,7 +74,7 @@ module.exports = {
         return;
       }
 
-      // 3. 戦力変更
+      // 3. 戦力変更ボタン
       if (interaction.customId === 'edit_power') {
         const participant = data.participants.find(p => p.id === interaction.user.id);
         if (!participant) {
@@ -82,7 +88,7 @@ module.exports = {
         return await interaction.showModal(modal);
       }
 
-      // 4. 集計方法変更
+      // 4. 集計方法変更ボタン（管理者のみ）
       if (interaction.customId === 'change_method') {
         if (!ALLOWED_USERS.includes(interaction.user.id)) return interaction.reply({ content: '権限がありません。', ephemeral: true });
         data.sortMethod = data.sortMethod === 'snake' ? 'balance' : 'snake';
@@ -94,7 +100,7 @@ module.exports = {
         return;
       }
 
-      // 5. 集計
+      // 5. 集計ボタン（管理者のみ）
       if (interaction.customId === 'calc_match') {
         if (!ALLOWED_USERS.includes(interaction.user.id)) return interaction.reply({ content: '権限がありません。', ephemeral: true });
         if (data.participants.length === 0) return interaction.reply({ content: '参加者がいません。', ephemeral: true });
@@ -112,6 +118,9 @@ module.exports = {
       }
     }
 
+    // ==========================================
+    // モーダル（フォーム送信）の処理
+    // ==========================================
     if (interaction.isModalSubmit()) {
       if (interaction.customId.startsWith('ann_mdl_')) {
         const parts = interaction.customId.split('_');
@@ -139,12 +148,17 @@ module.exports = {
           if (!client.stickyMap) client.stickyMap = new Map();
           client.stickyMap.set(interaction.channelId, { messageId: msg.id, text });
         }
+        return;
       }
 
-      // マッチング登録・変更の反映
+      // マッチング登録・変更のモーダル処理
       if (interaction.customId === 'modal_match_join' || interaction.customId === 'modal_match_edit') {
-        // 💡 チャンネルIDを鍵にしてデータを取得します
-        const data = client.matchingData.get(interaction.channelId);
+        // 💡【修正】モーダル送信時も、channelMap から常に「現在アクティブなメッセージID」を経由してデータを取得
+        const targetMessageId = client.channelMap.get(interaction.channelId);
+        const data = client.matchingData.get(targetMessageId);
+
+        if (!data) return interaction.reply({ content: '募集データが見つかりません。', ephemeral: true });
+
         const rawPower = interaction.fields.getTextInputValue('input_power');
         const { parsePower, buildAnnounceEmbed } = require('../utils/teamMaker');
         const power = parsePower(rawPower);
@@ -157,8 +171,13 @@ module.exports = {
           if (participant) participant.power = power;
         }
 
-        await interaction.deferUpdate();
-        await interaction.message.edit({ embeds: [buildAnnounceEmbed(data)] });
+        const targetMsg = await interaction.channel.messages.fetch(targetMessageId).catch(() => null);
+        if (targetMsg) {
+          await interaction.deferUpdate();
+          await targetMsg.edit({ embeds: [buildAnnounceEmbed(data)] });
+        } else {
+          await interaction.reply({ content: 'メッセージの更新に失敗しました。', ephemeral: true });
+        }
       }
     }
   },
