@@ -5,7 +5,8 @@ const path = require('path');
 const CONFIG_PATH = path.join(__dirname, '..', 'config.json');
 const ALLOWED_USERS = [
   '1088369918069715024',
-  '936419559165026304'
+  '936419559165026304',
+  `834272659067895838`
 ];
 
 function loadConfig() {
@@ -37,7 +38,7 @@ module.exports = {
       
       // アナウンス用のロール付与・解除ボタンの処理
       if (interaction.customId.startsWith('ann_btn_')) {
-        const [_, action, roleId] = interaction.customId.split('_'); // 'add' か 'remove' と ロールID
+        const [_, action, roleId] = interaction.customId.split('_');
         
         if (!roleId || roleId === 'none') {
           return interaction.reply({ content: 'このボタンには連動するロールがありません。', ephemeral: true });
@@ -71,15 +72,12 @@ module.exports = {
       if (!client.matchingData) client.matchingData = new Map();
       let data = client.matchingData.get(interaction.message.id);
 
-      // 【重要】再起動等でデータが飛んでいた場合、Embedのテキストから復元を試みる
       if (!data && interaction.message.embeds.length > 0) {
         const embed = interaction.message.embeds[0];
         if (embed.title === '━━ 参戦募集 ━━') {
           const { parseAnnounceEmbed } = require('../utils/teamMaker');
           data = parseAnnounceEmbed(interaction.message);
-          if (data) {
-            client.matchingData.set(interaction.message.id, data);
-          }
+          if (data) client.matchingData.set(interaction.message.id, data);
         }
       }
 
@@ -88,7 +86,6 @@ module.exports = {
         return;
       }
 
-      // 管理者専用ボタン（赤ボタン）の権限チェック
       if (interaction.customId === 'calc_match') {
         if (!ALLOWED_USERS.includes(interaction.user.id)) {
           await interaction.reply({ content: 'この操作を行う権限がありません。', ephemeral: true });
@@ -96,7 +93,6 @@ module.exports = {
         }
       }
 
-      // 1. 参加する
       if (interaction.customId === 'join_match') {
         const exists = data.participants.some(p => p.id === interaction.user.id);
         if (exists) {
@@ -113,7 +109,6 @@ module.exports = {
         return;
       }
 
-      // 2. 削除する（辞退）
       if (interaction.customId === 'leave_match') {
         const initialLength = data.participants.length;
         data.participants = data.participants.filter(p => p.id !== interaction.user.id);
@@ -130,7 +125,6 @@ module.exports = {
         return;
       }
 
-      // 3. 集計（管理者のみ）
       if (interaction.customId === 'calc_match') {
         if (data.participants.length === 0) {
           await interaction.reply({ content: '参加者がいません。', ephemeral: true });
@@ -152,7 +146,6 @@ module.exports = {
           description += `**⚠️ 余り（人数が足りません）**\n${members}`;
         }
 
-        // 📝 実行者のアイコンと名前（.setAuthor）を完全に消去しました
         await interaction.reply({
           embeds: [
             new EmbedBuilder()
@@ -168,16 +161,17 @@ module.exports = {
     if (interaction.isModalSubmit()) {
       
       // A. アナウンス文章が入力されて返ってきた時の処理
-      if (interaction.customId.startsWith('announce_modal_')) {
-        const [_, __, roleId, isStickyStr] = interaction.customId.split('_');
-        const isSticky = isStickyStr === 'true';
+      if (interaction.customId.startsWith('ann_mdl_')) {
+        // 文字数制限を回避するため、極限までIDを短縮
+        const [_, roleId, stickyFlag] = interaction.customId.split('_').slice(2);
+        const isSticky = stickyFlag === '1';
         const text = interaction.fields.getTextInputValue('announce_text');
 
+        // 🟢 1. チャンネルに送信する「本番用」のEmbed（青枠メッセージ）を作成
         const embed = new EmbedBuilder()
           .setColor('#5865F2')
           .setDescription(text);
 
-        // ロールが指定されている（none以外）なら2つのボタンを配置
         const components = [];
         if (roleId && roleId !== 'none') {
           const row = new ActionRowBuilder().addComponents(
@@ -187,13 +181,13 @@ module.exports = {
           components.push(row);
         }
 
-        // 一度非表示で応答を受け流す
-        await interaction.reply({ content: 'アナウンスを送信しました。', ephemeral: true });
+        // 🟢 2. コマンド実行者本人への返答（他の人には見えない非公開メッセージ）
+        await interaction.reply({ content: '✅ アナウンスを送信しました。', ephemeral: true });
         
-        // 指定されたチャンネルにメッセージとして本番送信
+        // 🟢 3. チャンネルにEmbed（枠付き）とボタンを本番投稿
         const msg = await interaction.channel.send({ embeds: [embed], components });
 
-        // もし常駐（sticky）が「はい」ならconfigに書き込む
+        // 常駐設定の保存
         if (isSticky) {
           const config = loadConfig();
           if (!config.sticky) config.sticky = {};
