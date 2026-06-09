@@ -45,10 +45,9 @@ module.exports = {
         }
       }
 
-      // 💡【修正】元の index.js と同じく、channelMap から大元のメッセージIDを経由してデータを取得します
-      // これにより、メッセージがどれだけ下に送り直されても、大元のデータに確実にアクセスできます
-      const baseMessageId = client.channelMap.get(interaction.channelId) || interaction.message.id;
-      let data = client.matchingData.get(baseMessageId);
+      // 💡【修正】元の index.js と同じく、大元のデータが眠るメッセージIDを特定して取得します
+      const targetMessageId = client.channelMap.get(interaction.channelId) || interaction.message.id;
+      let data = client.matchingData.get(targetMessageId);
       
       if (!data) return interaction.reply({ content: '募集データが見つかりません。新しくコマンドを実行し直してください。', ephemeral: true });
 
@@ -153,7 +152,7 @@ module.exports = {
 
       // マッチング登録・変更のモーダル処理
       if (interaction.customId === 'modal_match_join' || interaction.customId === 'modal_match_edit') {
-        // 💡【修正】モーダル送信時も、channelMap から常に「現在アクティブなメッセージID」を経由してデータを取得
+        // 💡 モーダル送信時も、常にchannelMapから最新のメッセージIDを経由してデータを取得
         const targetMessageId = client.channelMap.get(interaction.channelId);
         const data = client.matchingData.get(targetMessageId);
 
