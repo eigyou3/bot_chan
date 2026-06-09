@@ -22,7 +22,6 @@ function saveConfig(data) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2));
 }
 
-// 時刻文字列（"HH:MM"）を本日のミリ秒に変換するヘルパー
 function parseTimeToMs(timeStr) {
   if (!timeStr) return null;
   const match = timeStr.trim().match(/^([0-2]?\d):([0-5]\d)$/);
@@ -49,15 +48,12 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('admin')
     .setDescription('管理用コマンド')
-    // アナウンスコマンド
     .addSubcommand(sub =>
       sub.setName('announce')
         .setDescription('アナウンスを送信（文章はポップアップで入力）')
-        // .setRequired(false) にして任意入力にしました！
         .addRoleOption(o => o.setName('role').setDescription('付与・解除させたいロール（空欄ならボタンなし）').setRequired(false))
         .addBooleanOption(o => o.setName('sticky').setDescription('最下行に常駐（固定）させるか（デフォルト: いいえ）').setRequired(false))
     )
-    // アラームコマンド
     .addSubcommand(sub =>
       sub.setName('alarm')
         .setDescription('日本時刻でアラームを設定（複数指定はスペース区切り）')
@@ -77,17 +73,16 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
     const config = loadConfig();
 
-    // --- 1. アナウンス（モーダル ＆ 任意ボタン式） ---
     if (subcommand === 'announce') {
       const role = interaction.options.getRole('role');
       const isSticky = interaction.options.getBoolean('sticky') || false;
       
-      // ロールが選ばれていない場合は "none" をIDの代わりにしてモーダルに引き渡す
       const roleIdParam = role ? role.id : 'none';
+      const stickyParam = isSticky ? '1' : '0';
 
-      // 文章を入力するポップアップ（モーダル）を作成
+      // 📝 モーダルID全体の長さを限界まで削り、文字数制限（100文字）を絶対に超えないように修正
       const modal = new ModalBuilder()
-        .setCustomId(`announce_modal_${roleIdParam}_${isSticky}`)
+        .setCustomId(`ann_mdl_${roleIdParam}_${stickyParam}`)
         .setTitle('アナウンス内容の入力');
 
       const textInput = new TextInputBuilder()
@@ -101,7 +96,6 @@ module.exports = {
       return await interaction.showModal(modal);
     }
 
-    // --- 2. アラーム ---
     if (subcommand === 'alarm') {
       const timesInput = interaction.options.getString('times');
       const message = interaction.options.getString('message');
@@ -141,7 +135,6 @@ module.exports = {
       });
     }
 
-    // --- 3. VC通知先設定 ---
     if (subcommand === 'setvc') {
       config.vcNotifyChannelId = interaction.channelId;
       saveConfig(config);
