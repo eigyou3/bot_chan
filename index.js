@@ -20,10 +20,10 @@ const ANNOUNCE_ALLOWED_USERS = [
 // ==============================
 // フォント登録（ウェルカム画像用）
 // ==============================
-const fontBase = require('path').join(__dirname, 'node_modules', '@fontsource', 'noto-sans-jp', 'files');
+const fontBase = path.join(__dirname, 'node_modules', '@fontsource', 'noto-sans-jp', 'files');
 try {
-  GlobalFonts.registerFromPath(require('path').join(fontBase, 'noto-sans-jp-japanese-900-normal.woff'), 'NotoSansJP-Black');
-  GlobalFonts.registerFromPath(require('path').join(fontBase, 'noto-sans-jp-japanese-100-normal.woff'), 'NotoSansJP-Thin');
+  GlobalFonts.registerFromPath(path.join(fontBase, 'noto-sans-jp-japanese-900-normal.woff'), 'NotoSansJP-Black');
+  GlobalFonts.registerFromPath(path.join(fontBase, 'noto-sans-jp-japanese-100-normal.woff'), 'NotoSansJP-Thin');
   console.log('✅ フォント読み込み成功');
 } catch (e) {
   console.warn('⚠️ フォント読み込み失敗:', e.message);
@@ -32,11 +32,9 @@ try {
 // ==============================
 // ウェルカム設定
 // ==============================
-const WELCOME_ALLOWED_GUILDS = [
-  '1496054346385723472',
-];
 const WELCOME_NOTIFY_ROLE_ID = '1496147336043298866';
 const WELCOME_BG_OPACITY = 0.15;
+const WELCOME_ALLOWED_GUILDS = ['1496054346385723472'];
 const DEFAULT_WELCOME_MESSAGE = 'ご来場お待ちしておりました。\n担当スタッフがすぐにご案内いたします。';
 
 // ==============================
@@ -155,14 +153,11 @@ const client = new Client({
   ],
 });
 
+client.on('error', (err) => { console.error('Discord error:', err.message); });
+
 // ==============================
 // スラッシュコマンド登録
 // ==============================
-// 未処理エラーでクラッシュしないように
-client.on('error', (err) => {
-  console.error('Discord client error:', err.message);
-});
-
 client.once('ready', async () => {
   console.log(`✅ Bot起動: ${client.user.tag}`);
   loadSticky();
@@ -229,13 +224,10 @@ client.once('ready', async () => {
 // インタラクション処理
 // ==============================
 client.on('interactionCreate', async (interaction) => {
-  console.log('interaction type:', interaction.type, interaction.customId ?? interaction.commandName ?? '');
 
 
-  // /welcome → モーダル表示
+  // /welcome
   if (interaction.isChatInputCommand() && interaction.commandName === 'welcome') {
-    console.log('welcome command received, guild:', interaction.guildId);
-    // サーバー制限チェック
     if (!WELCOME_ALLOWED_GUILDS.includes(interaction.guildId)) {
       await interaction.reply({ content: '❌ このサーバーでは使用できません。', ephemeral: true });
       return;
@@ -247,97 +239,50 @@ client.on('interactionCreate', async (interaction) => {
 
     modal.addComponents(
       new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('date')
-          .setLabel('日付（例: 6/7）')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('月/日')
-          .setRequired(true)
+        new TextInputBuilder().setCustomId('date').setLabel('日付（例: 6/8）').setStyle(TextInputStyle.Short).setPlaceholder('月/日').setRequired(true)
       ),
       new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('guest1')
-          .setLabel('来場者1　時間　お名前（例: 10:00 斉藤様）')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('時間 お名前')
-          .setRequired(true)
+        new TextInputBuilder().setCustomId('time').setLabel('時間（例: 10:00）').setStyle(TextInputStyle.Short).setPlaceholder('時間').setRequired(true)
       ),
       new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('guest2')
-          .setLabel('来場者2　時間　お名前（省略可）')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('時間 お名前')
-          .setRequired(false)
+        new TextInputBuilder().setCustomId('name').setLabel('お客様名（例: 齋藤）').setStyle(TextInputStyle.Short).setPlaceholder('様は不要です').setRequired(true)
       ),
       new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('guest3')
-          .setLabel('来場者3　時間　お名前（省略可）')
-          .setStyle(TextInputStyle.Short)
-          .setPlaceholder('時間 お名前')
-          .setRequired(false)
-      ),
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId('welcome_msg')
-          .setLabel('ウェルカムメッセージ（省略可）')
-          .setStyle(TextInputStyle.Paragraph)
-          .setPlaceholder('ご来場お待ちしておりました。\n担当スタッフがすぐにご案内いたします。')
-          .setRequired(false)
+        new TextInputBuilder().setCustomId('welcome_msg').setLabel('ウェルカムメッセージ（省略可）').setStyle(TextInputStyle.Paragraph).setPlaceholder('ご来場お待ちしておりました。\n担当スタッフがすぐにご案内いたします。').setRequired(false)
       ),
     );
 
-    console.log('showing modal...');
     await interaction.showModal(modal);
-    console.log('modal shown');
     return;
   }
 
   // ウェルカムモーダル送信
   if (interaction.isModalSubmit() && interaction.customId === 'welcome_modal') {
-    try { await interaction.deferReply(); } catch { return; }
+    await interaction.deferReply();
 
     const dateRaw = interaction.fields.getTextInputValue('date').trim();
-    const raw1 = interaction.fields.getTextInputValue('guest1').trim();
-    const raw2 = interaction.fields.getTextInputValue('guest2').trim();
-    const raw3 = interaction.fields.getTextInputValue('guest3').trim();
+    const timeRaw = interaction.fields.getTextInputValue('time').trim();
+    const nameRaw = interaction.fields.getTextInputValue('name').trim();
     const msgInput = interaction.fields.getTextInputValue('welcome_msg').trim();
     const welcomeMessage = msgInput || DEFAULT_WELCOME_MESSAGE;
 
-    const date = parseDate(dateRaw);
-    if (!date) {
-      await interaction.editReply('⚠️ 日付を正しく入力してください。例: `6/7`');
-      return;
-    }
+    const date = parseWelcomeDate(dateRaw);
+    if (!date) { await interaction.editReply('⚠️ 日付を正しく入力してください。例: `6/8`'); return; }
 
-    const guests = [];
-    for (const raw of [raw1, raw2, raw3]) {
-      if (!raw) continue;
-      const parsed = parseTimeAndName(raw);
-      if (parsed) guests.push({ date, ...parsed });
-    }
-
-    // 時間順に並べ替え（早い順）
-    guests.sort((a, b) => a.time.localeCompare(b.time));
-
-    if (guests.length === 0) {
-      await interaction.editReply('⚠️ 来場者情報を正しく入力してください。例: `10:00 斉藤様`');
-      return;
-    }
+    const time = parseWelcomeTime(timeRaw);
+    const name = formatWelcomeName(nameRaw);
 
     try {
-      const buffer = await generateWelcomeImage({ guests, welcomeMessage }, 1920, 1080);
+      const buffer = await generateWelcomeImage({ date, time, name, welcomeMessage }, 1920, 1080);
       const file = new AttachmentBuilder(buffer, { name: 'welcome.jpg' });
       const member = interaction.member;
       const roleColor = member?.roles?.color?.hexColor ?? '#808080';
-      const names = guests.map(g => g.name).join('・');
 
       const embed = new EmbedBuilder()
         .setColor(roleColor)
         .setDescription(
           `<@${interaction.user.id}> !\n` +
-          `${names}のウェルカムを作成したよ！\n\n` +
+          `${name}のウェルカムを作成したよ！\n\n` +
           `<@&${WELCOME_NOTIFY_ROLE_ID}> みんなにも共有しておくね！`
         )
         .setImage('attachment://welcome.jpg');
@@ -345,7 +290,7 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.editReply({ embeds: [embed], files: [file] });
     } catch (err) {
       console.error(err);
-      await interaction.editReply('❌ 画像生成中にエラーが発生しました');
+      await interaction.editReply('❌ 画像生成中にエラーが発生しました').catch(() => {});
     }
     return;
   }
@@ -704,97 +649,31 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
 
 
 // ==============================
-// ウェルカム画像テキストパース
-// ==============================
-function parseDate(text) {
-  const normalized = text
-    .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
-    .replace(/[／]/g, '/').replace(/[：]/g, ':').replace(/　/g, ' ').trim();
-  const m = normalized.match(/(\d{1,2})[\/月](\d{1,2})(?:日)?/);
-  if (!m) return null;
-  const year = new Date().getFullYear();
-  const month = String(parseInt(m[1])).padStart(2, '0');
-  const day = String(parseInt(m[2])).padStart(2, '0');
-  return `${year}.${month}.${day}`;
-}
-
-function parseTimeAndName(text) {
-  // 全角→半角、スペース統一
-  const normalized = text
-    .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
-    .replace(/[：]/g, ':')
-    .replace(/[　 ]+/g, ' ')
-    .trim();
-
-  // 時間パース（12:00 / 12時00分 / 12時 / 1200 対応）
-  let hour = '00', minute = '00';
-  const timeMatch = normalized.match(/(\d{1,2}):(\d{2})/) ||
-                    normalized.match(/(\d{1,2})時(\d{2})?(?:分)?/) ||
-                    normalized.match(/^(\d{2})(\d{2})(?=\s)/);
-  if (timeMatch) {
-    if (timeMatch[0].includes(':')) {
-      hour = timeMatch[1].padStart(2, '0');
-      minute = timeMatch[2].padStart(2, '0');
-    } else if (timeMatch[0].includes('時')) {
-      hour = timeMatch[1].padStart(2, '0');
-      minute = (timeMatch[2] || '00').padStart(2, '0');
-    } else {
-      hour = timeMatch[1].padStart(2, '0');
-      minute = timeMatch[2].padStart(2, '0');
-    }
-  }
-
-  // 名前パース（時間部分を除いた残り）
-  const withoutTime = normalized
-    .replace(/(\d{1,2}):(\d{2})/, '')
-    .replace(/(\d{1,2})時(\d{2})?(?:分)?/, '')
-    .replace(/^\d{4}\s/, '')
-    .trim();
-
-  if (!withoutTime) return null;
-
-  // 様・さん の処理（なければ様を付与、重複しない）
-  let name = withoutTime.replace(/さん$/, '様');
-  if (!name.endsWith('様')) name += '様';
-
-  return { time: `${hour}:${minute}`, name };
-}
-
-function parseGuest(text) {
-  const normalized = text
-    .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
-    .replace(/[／]/g, '/')
-    .replace(/[：]/g, ':')
-    .replace(/　/g, ' ')
-    .trim();
-
-  const dateMatch = normalized.match(/(\d{1,2})[\/月](\d{1,2})(?:日)?/);
-  const timeMatch = normalized.match(/(\d{1,2}):(\d{2})|(\d{1,2})時(\d{2})?(?:分)?/);
-  const nameMatch = normalized.match(/([^\s\d:/月日時分]+(?:様|さん))/);
-
-  if (!dateMatch || !nameMatch) return null;
-
-  const month = parseInt(dateMatch[1]);
-  const day   = parseInt(dateMatch[2]);
-  let hour = '00', minute = '00';
-
-  if (timeMatch) {
-    if (timeMatch[1] !== undefined) {
-      hour   = timeMatch[1].padStart(2, '0');
-      minute = timeMatch[2].padStart(2, '0');
-    } else {
-      hour   = timeMatch[3].padStart(2, '0');
-      minute = (timeMatch[4] || '00').padStart(2, '0');
-    }
-  }
-
-  return { date: `${month}/${day}`, time: `${hour}:${minute}`, name: nameMatch[1] };
-}
-
-// ==============================
 // ウェルカム画像生成
 // ==============================
-async function generateWelcomeImage({ guests, welcomeMessage }, W = 1920, H = 1080) {
+function parseWelcomeDate(text) {
+  const n = text.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[／]/g, '/').trim();
+  const m = n.match(/(\d{1,2})[\/月](\d{1,2})(?:日)?/);
+  if (!m) return null;
+  const year = new Date().getFullYear();
+  return `${year}.${String(parseInt(m[1])).padStart(2,'0')}.${String(parseInt(m[2])).padStart(2,'0')}`;
+}
+
+function parseWelcomeTime(text) {
+  const n = text.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0)).replace(/[：]/g, ':').trim();
+  const m = n.match(/(\d{1,2}):(\d{2})/) || n.match(/(\d{1,2})時(\d{2})?(?:分)?/);
+  if (!m) return '00:00';
+  if (m[0].includes(':')) return `${m[1].padStart(2,'0')}:${m[2].padStart(2,'0')}`;
+  return `${m[1].padStart(2,'0')}:${(m[2]||'00').padStart(2,'0')}`;
+}
+
+function formatWelcomeName(name) {
+  let n = name.trim().replace(/さん$/, '様');
+  if (!n.endsWith('様')) n += '様';
+  return n;
+}
+
+async function generateWelcomeImage({ date, time, name, welcomeMessage }, W = 1920, H = 1080) {
   const SCALE = 2;
   const canvas = createCanvas(W * SCALE, H * SCALE);
   const ctx = canvas.getContext('2d');
@@ -804,113 +683,56 @@ async function generateWelcomeImage({ guests, welcomeMessage }, W = 1920, H = 10
   ctx.quality = 'best';
   ctx.textDrawingMode = 'path';
 
-  const BLACK = 'NotoSansJP-Black';
-  const THIN  = 'NotoSansJP-Thin';
+  const THIN = 'NotoSansJP-Thin';
   const pt = v => Math.round(v * 96 / 72);
   const cx = Math.round(W / 2);
 
+  // 背景
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, W, H);
 
+  // 外枠
   ctx.strokeStyle = '#CCCCCC';
   ctx.lineWidth = 1.5;
   ctx.strokeRect(Math.round(W*0.021), Math.round(H*0.037), Math.round(W*0.958), Math.round(H*0.926));
 
+  // 内枠
   ctx.strokeStyle = '#E8E8E8';
   ctx.lineWidth = 1;
   ctx.strokeRect(Math.round(W*0.029), Math.round(H*0.052), Math.round(W*0.942), Math.round(H*0.896));
 
+  // 背景画像
   try {
-    const bgImg = await loadImage(require('path').join(__dirname, 'bg.png'));
+    const bgImg = await loadImage(path.join(__dirname, 'bg.png'));
     ctx.globalAlpha = WELCOME_BG_OPACITY;
     ctx.drawImage(bgImg, 0, 0, W, H);
     ctx.globalAlpha = 1.0;
-  } catch (e) {
-    console.warn('bg.png読み込みスキップ:', e.message);
-  }
+  } catch (e) {}
 
   ctx.textAlign = 'center';
-  ctx.font = `900 ${pt(80)}px "${BLACK}"`;
-  ctx.fillStyle = 'rgba(64,64,64,0.50)';
-  ctx.fillText('Welcome', cx + 6, 280);
-  ctx.fillText('Welcome', cx, 280);
 
-  const guestCount = guests.length;
-
-  // 共通日付（最初のゲストの日付）
-  const sharedDate = guests[0].date;
-
-  // 日付を上部に表示
+  // 日付
   ctx.font = `100 ${pt(26)}px "${THIN}"`;
+  ctx.fillStyle = '#888888';
+  ctx.fillText(date, cx, 320);
+
+  // 時間
+  ctx.font = `100 ${pt(32)}px "${THIN}"`;
   ctx.fillStyle = '#606060';
-  ctx.fillText(sharedDate, cx, 340);
+  ctx.fillText(time, cx, 430);
 
-  if (guestCount === 1) {
-    // 1組：中央
-    ctx.font = `100 ${pt(28)}px "${THIN}"`;
-    ctx.fillStyle = '#606060';
-    ctx.fillText(guests[0].time, cx, 420);
-    ctx.font = `100 ${pt(56)}px "${THIN}"`;
-    ctx.fillStyle = '#404040';
-    ctx.fillText(guests[0].name, cx, 510);
-
-  } else if (guestCount === 2) {
-    // 2組：左右
-    const col1 = Math.round(W * 0.28);
-    const col2 = Math.round(W * 0.72);
-    ctx.fillStyle = '#606060';
-    ctx.font = `100 ${pt(24)}px "${THIN}"`;
-    ctx.fillText(guests[0].time, col1, 420);
-    ctx.font = `100 ${pt(44)}px "${THIN}"`;
-    ctx.fillStyle = '#404040';
-    ctx.fillText(guests[0].name, col1, 500);
-    ctx.font = `100 ${pt(24)}px "${THIN}"`;
-    ctx.fillStyle = '#606060';
-    ctx.fillText(guests[1].time, col2, 420);
-    ctx.font = `100 ${pt(44)}px "${THIN}"`;
-    ctx.fillStyle = '#404040';
-    ctx.fillText(guests[1].name, col2, 500);
-    // 縦線
-    ctx.strokeStyle = '#E0E0E0';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(cx, 380);
-    ctx.lineTo(cx, 530);
-    ctx.stroke();
-
-  } else {
-    // 3組：3分割
-    const col1 = Math.round(W * 0.25);
-    const col2 = cx;
-    const col3 = Math.round(W * 0.75);
-    const cols = [col1, col2, col3];
-    guests.forEach((g, i) => {
-      ctx.font = `100 ${pt(22)}px "${THIN}"`;
-      ctx.fillStyle = '#606060';
-      ctx.fillText(g.time, cols[i], 420);
-      ctx.font = `100 ${pt(38)}px "${THIN}"`;
-      ctx.fillStyle = '#404040';
-      ctx.fillText(g.name, cols[i], 500);
-    });
-    // 縦線2本
-    ctx.strokeStyle = '#E0E0E0';
-    ctx.lineWidth = 1;
-    [Math.round(W*0.4), Math.round(W*0.6)].forEach(x => {
-      ctx.beginPath();
-      ctx.moveTo(x, 380);
-      ctx.lineTo(x, 530);
-      ctx.stroke();
-    });
-  }
+  // 名前
+  ctx.font = `100 ${pt(56)}px "${THIN}"`;
+  ctx.fillStyle = '#404040';
+  ctx.fillText(name, cx, 540);
 
   // ウェルカムメッセージ（下部固定）
-  const msgY = 840;
   ctx.font = `100 ${pt(22)}px "${THIN}"`;
   ctx.fillStyle = '#404040';
   const lines = welcomeMessage.split('\n');
   const lineH = pt(16) * 1.9;
   lines.forEach((line, i) => {
-    ctx.fillText(line, cx, msgY + i * lineH);
+    ctx.fillText(line, cx, 840 + i * lineH);
   });
 
   return canvas.toBuffer('image/jpeg', { quality: 1.0 });
