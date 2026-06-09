@@ -45,7 +45,7 @@ module.exports = {
       
       if (!data) return interaction.reply({ content: '募集データが見つかりません。新しくコマンドを実行し直してください。', ephemeral: true });
 
-      // 1. 参加
+      // 1. 参加 (※deferUpdateは実行しない)
       if (interaction.customId === 'join_match') {
         const exists = data.participants.some(p => p.id === interaction.user.id);
         if (exists) return interaction.reply({ content: '既に登録されています。', ephemeral: true });
@@ -67,7 +67,7 @@ module.exports = {
         return;
       }
 
-      // 3. 戦力変更
+      // 3. 戦力変更 (※deferUpdateは実行しない)
       if (interaction.customId === 'edit_power') {
         const participant = data.participants.find(p => p.id === interaction.user.id);
         if (!participant) {
@@ -93,7 +93,7 @@ module.exports = {
         return;
       }
 
-      // 5. 集計
+      // 5. 集集計
       if (interaction.customId === 'calc_match') {
         if (!ALLOWED_USERS.includes(interaction.user.id)) return interaction.reply({ content: '権限がありません。', ephemeral: true });
         if (data.participants.length === 0) return interaction.reply({ content: '参加者がいません。', ephemeral: true });
