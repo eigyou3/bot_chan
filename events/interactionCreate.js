@@ -6,7 +6,7 @@ const CONFIG_PATH = path.join(__dirname, '..', 'config.json');
 const ALLOWED_USERS = [
   '1088369918069715024',
   '936419559165026304',
-  `834272659067895838`
+  '834272659067895838'
 ];
 
 function loadConfig() {
@@ -160,14 +160,14 @@ module.exports = {
     // --- モーダル送信の処理 ---
     if (interaction.isModalSubmit()) {
       
-      // A. アナウンス文章が入力されて返ってきた時の処理
       if (interaction.customId.startsWith('ann_mdl_')) {
-        // 文字数制限を回避するため、極限までIDを短縮
-        const [_, roleId, stickyFlag] = interaction.customId.split('_').slice(2);
+        const parts = interaction.customId.split('_');
+        const roleId = parts[2];
+        const stickyFlag = parts[3];
         const isSticky = stickyFlag === '1';
         const text = interaction.fields.getTextInputValue('announce_text');
 
-        // 🟢 1. チャンネルに送信する「本番用」のEmbed（青枠メッセージ）を作成
+        // 🔵 チャンネルに本番送信される綺麗な青枠（Embed）メッセージ
         const embed = new EmbedBuilder()
           .setColor('#5865F2')
           .setDescription(text);
@@ -181,10 +181,10 @@ module.exports = {
           components.push(row);
         }
 
-        // 🟢 2. コマンド実行者本人への返答（他の人には見えない非公開メッセージ）
+        // コマンドを実行した本人への「非公開」の完了通知（これでモーダルがエラーなく閉じます）
         await interaction.reply({ content: '✅ アナウンスを送信しました。', ephemeral: true });
         
-        // 🟢 3. チャンネルにEmbed（枠付き）とボタンを本番投稿
+        // チャンネルに枠付きのアナウンス（Embed）とボタンを本番投稿！
         const msg = await interaction.channel.send({ embeds: [embed], components });
 
         // 常駐設定の保存
