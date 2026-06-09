@@ -18,20 +18,20 @@ function formatPower(v) {
 
 // 募集用Embedの作成
 function buildAnnounceEmbed(data) {
-  const count = data.participants.length;
-  const nameList = count > 0 
-    ? data.participants.map(p => `${p.name} (${formatPower(p.power)})`).join('\n') 
-    : 'なし';
-
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor('#5865F2')
-    .setAuthor({ name: data.authorTag, iconURL: data.authorAvatar })
-    .setTitle('══ 参戦募集 ══')
+    .setTitle('━━ 参戦募集 ━━')
     .setDescription(`集計方法：**${data.sortLabel}**`)
     .addFields(
-      { name: `➔ 参戦メンバー (${count}人)`, value: nameList },
-      { name: '➔ 操作方法', value: '🟢：参戦登録（戦力・ジョブ入力）\n🔴：辞退\n🔵：集計（管理権限のみ）' }
+      { 
+        name: `➡️ 参戦メンバー (${data.participants.length}人)`, 
+        value: data.participants.length > 0 
+          ? data.participants.map(p => `${p.name} (戦力: ${p.power})`).join('\n') 
+          : 'なし' 
+      }
     );
+
+  return embed;
 }
 
 // チーム分けロジック
