@@ -43,7 +43,6 @@ module.exports = {
       if (!client.matchingData) client.matchingData = new Map();
       let data = client.matchingData.get(interaction.message.id);
       
-      // 🛠 クラッシュの原因となっていた不完全な Embed からの復元処理を完全に撤去しました
       if (!data) return interaction.reply({ content: '募集データが見つかりません。新しくコマンドを実行し直してください。', ephemeral: true });
 
       // 1. 参加
@@ -63,8 +62,9 @@ module.exports = {
       if (interaction.customId === 'leave_match') {
         data.participants = data.participants.filter(p => p.id !== interaction.user.id);
         const { buildAnnounceEmbed } = require('../utils/teamMaker');
+        await interaction.deferUpdate();
         await interaction.message.edit({ embeds: [buildAnnounceEmbed(data)] });
-        return await interaction.reply({ content: '削除しました。', ephemeral: true });
+        return;
       }
 
       // 3. 戦力変更
@@ -81,7 +81,7 @@ module.exports = {
         return await interaction.showModal(modal);
       }
 
-      // 4. 集計方法変更（管理者のみ）
+      // 4. 集計方法変更
       if (interaction.customId === 'change_method') {
         if (!ALLOWED_USERS.includes(interaction.user.id)) return interaction.reply({ content: '権限がありません。', ephemeral: true });
         data.sortMethod = data.sortMethod === 'snake' ? 'balance' : 'snake';
@@ -93,7 +93,7 @@ module.exports = {
         return;
       }
 
-      // 5. 集計（管理者のみ）
+      // 5. 集計
       if (interaction.customId === 'calc_match') {
         if (!ALLOWED_USERS.includes(interaction.user.id)) return interaction.reply({ content: '権限がありません。', ephemeral: true });
         if (data.participants.length === 0) return interaction.reply({ content: '参加者がいません。', ephemeral: true });
@@ -111,7 +111,6 @@ module.exports = {
       }
     }
 
-    // モーダル処理
     if (interaction.isModalSubmit()) {
       if (interaction.customId.startsWith('ann_mdl_')) {
         const parts = interaction.customId.split('_');
@@ -156,8 +155,8 @@ module.exports = {
           if (participant) participant.power = power;
         }
 
+        await interaction.deferUpdate();
         await interaction.message.edit({ embeds: [buildAnnounceEmbed(data)] });
-        await interaction.reply({ content: '完了しました。', ephemeral: true });
       }
     }
   },
