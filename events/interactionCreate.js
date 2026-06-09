@@ -1,9 +1,19 @@
 const { EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
 
+const CONFIG_PATH = path.join(__dirname, '..', 'config.json');
 const ALLOWED_USERS = [
   '1088369918069715024',
   '936419559165026304'
 ];
+
+function loadConfig() {
+  try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch { return {}; }
+}
+function saveConfig(data) {
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2));
+}
 
 module.exports = {
   name: 'interactionCreate',
@@ -24,11 +34,57 @@ module.exports = {
 
     // --- ボタン入力の処理 ---
     if (interaction.isButton()) {
+      
+      // アナウンス用のロール付与・解除ボタンの処理
+      if (interaction.customId.startsWith('ann_btn_')) {
+        const [_, action, roleId] = interaction.customId.split('_'); // 'add' か 'remove' と ロールID
+        
+        if (!roleId || roleId === 'none') {
+          return interaction.reply({ content: 'このボタンには連動するロールがありません。', ephemeral: true });
+        }
+
+        const role = await interaction.guild.roles.fetch(roleId).catch(() => null);
+        if (!role) {
+          return interaction.reply({ content: '対象のロールが見つかりませんでした。', ephemeral: true });
+        }
+
+        const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+        if (!member) return;
+
+        if (action === 'add') {
+          if (member.roles.cache.has(roleId)) {
+            return interaction.reply({ content: `すでに <@&${roleId}> を持っています。`, ephemeral: true });
+          }
+          await member.roles.add(role).catch(() => null);
+          return interaction.reply({ content: `✅ <@&${roleId}> を付与しました！`, ephemeral: true });
+        } else if (action === 'remove') {
+          if (!member.roles.cache.has(roleId)) {
+            return interaction.reply({ content: `まだ <@&${roleId}> を持っていません。`, ephemeral: true });
+          }
+          await member.roles.remove(role).catch(() => null);
+          return interaction.reply({ content: `🗑️ <@&${roleId}> を解除しました。`, ephemeral: true });
+        }
+        return;
+      }
+
+      // --- マッチング機能の処理 ---
       if (!client.matchingData) client.matchingData = new Map();
-      const data = client.matchingData.get(interaction.message.id);
+      let data = client.matchingData.get(interaction.message.id);
+
+      // 【重要】再起動等でデータが飛んでいた場合、Embedのテキストから復元を試みる
+      if (!data && interaction.message.embeds.length > 0) {
+        const embed = interaction.message.embeds[0];
+        if (embed.title === '━━ 参戦募集 ━━') {
+          const { parseAnnounceEmbed } = require('../utils/teamMaker');
+          data = parseAnnounceEmbed(interaction.message);
+          if (data) {
+            client.matchingData.set(interaction.message.id, data);
+          }
+        }
+      }
 
       if (!data) {
-        await interaction.reply({ content: '募集データが見つかりません。', ephemeral: true });
+        await interaction.reply({ content: '募集データが見つからないか、復元できませんでした。新しく募集し直してください。', ephemeral: true });
         return;
       }
 
@@ -57,7 +113,7 @@ module.exports = {
         return;
       }
 
-      // 2. 削除する
+      // 2. 削除する（辞退）
       if (interaction.customId === 'leave_match') {
         const initialLength = data.participants.length;
         data.participants = data.participants.filter(p => p.id !== interaction.user.id);
@@ -96,11 +152,11 @@ module.exports = {
           description += `**⚠️ 余り（人数が足りません）**\n${members}`;
         }
 
+        // 📝 実行者のアイコンと名前（.setAuthor）を完全に消去しました
         await interaction.reply({
           embeds: [
             new EmbedBuilder()
               .setColor('#5865F2')
-              .setAuthor({ name: data.authorTag, iconURL: data.authorAvatar })
               .setDescription(description)
           ]
         });
@@ -110,11 +166,58 @@ module.exports = {
 
     // --- モーダル送信の処理 ---
     if (interaction.isModalSubmit()) {
+      
+      // A. アナウンス文章が入力されて返ってきた時の処理
+      if (interaction.customId.startsWith('announce_modal_')) {
+        const [_, __, roleId, isStickyStr] = interaction.customId.split('_');
+        const isSticky = isStickyStr === 'true';
+        const text = interaction.fields.getTextInputValue('announce_text');
+
+        const embed = new EmbedBuilder()
+          .setColor('#5865F2')
+          .setDescription(text);
+
+        // ロールが指定されている（none以外）なら2つのボタンを配置
+        const components = [];
+        if (roleId && roleId !== 'none') {
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`ann_btn_add_${roleId}`).setLabel('ロールを受け取る').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`ann_btn_remove_${roleId}`).setLabel('ロールを解除する').setStyle(ButtonStyle.Danger)
+          );
+          components.push(row);
+        }
+
+        // 一度非表示で応答を受け流す
+        await interaction.reply({ content: 'アナウンスを送信しました。', ephemeral: true });
+        
+        // 指定されたチャンネルにメッセージとして本番送信
+        const msg = await interaction.channel.send({ embeds: [embed], components });
+
+        // もし常駐（sticky）が「はい」ならconfigに書き込む
+        if (isSticky) {
+          const config = loadConfig();
+          if (!config.sticky) config.sticky = {};
+          config.sticky[interaction.channelId] = { messageId: msg.id, text };
+          saveConfig(config);
+
+          if (!client.stickyMap) client.stickyMap = new Map();
+          client.stickyMap.set(interaction.channelId, { messageId: msg.id, text });
+        }
+        return;
+      }
+
+      // B. マッチングの参戦登録情報が返ってきた時の処理
       if (interaction.customId === 'modal_match_join') {
         if (!client.matchingData) client.matchingData = new Map();
-        const data = client.matchingData.get(interaction.message.id);
+        let data = client.matchingData.get(interaction.message.id);
+        
+        if (!data && interaction.message.embeds.length > 0) {
+          const { parseAnnounceEmbed } = require('../utils/teamMaker');
+          data = parseAnnounceEmbed(interaction.message);
+        }
+
         if (!data) {
-          await interaction.reply({ content: '募集データが見つかりません。', ephemeral: true });
+          await interaction.reply({ content: '募集データが見つかりません。もう一度募集し直してください。', ephemeral: true });
           return;
         }
 
