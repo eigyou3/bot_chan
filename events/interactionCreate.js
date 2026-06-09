@@ -41,7 +41,8 @@ module.exports = {
 
       // マッチングボタンの処理
       if (!client.matchingData) client.matchingData = new Map();
-      let data = client.matchingData.get(interaction.message.id);
+      // 💡 メッセージIDではなく、チャンネルIDを鍵にしてデータを取得します
+      let data = client.matchingData.get(interaction.channelId);
       
       if (!data) return interaction.reply({ content: '募集データが見つかりません。新しくコマンドを実行し直してください。', ephemeral: true });
 
@@ -142,7 +143,8 @@ module.exports = {
 
       // マッチング登録・変更の反映
       if (interaction.customId === 'modal_match_join' || interaction.customId === 'modal_match_edit') {
-        const data = client.matchingData.get(interaction.message.id);
+        // 💡 チャンネルIDを鍵にしてデータを取得します
+        const data = client.matchingData.get(interaction.channelId);
         const rawPower = interaction.fields.getTextInputValue('input_power');
         const { parsePower, buildAnnounceEmbed } = require('../utils/teamMaker');
         const power = parsePower(rawPower);
@@ -155,7 +157,6 @@ module.exports = {
           if (participant) participant.power = power;
         }
 
-        // 🛠 応答エラーとクラッシュを防ぐため、確定させてからメッセージを更新する順序に修正
         await interaction.deferUpdate();
         await interaction.message.edit({ embeds: [buildAnnounceEmbed(data)] });
       }
