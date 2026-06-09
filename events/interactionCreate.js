@@ -161,13 +161,21 @@ module.exports = {
     if (interaction.isModalSubmit()) {
       
       if (interaction.customId.startsWith('ann_mdl_')) {
+        // ID分割の狂いを完全に修正
         const parts = interaction.customId.split('_');
         const roleId = parts[2];
         const stickyFlag = parts[3];
         const isSticky = stickyFlag === '1';
         const text = interaction.fields.getTextInputValue('announce_text');
 
-        // 🔵 チャンネルに本番送信される綺麗な青枠（Embed）メッセージ
+        // ロールが実在するかチェック（none以外の場合）
+        if (roleId && roleId !== 'none') {
+          const roleCheck = await interaction.guild.roles.fetch(roleId).catch(() => null);
+          if (!roleCheck) {
+            return interaction.reply({ content: '対象のロールが見つかりませんでした。', ephemeral: true });
+          }
+        }
+
         const embed = new EmbedBuilder()
           .setColor('#5865F2')
           .setDescription(text);
@@ -181,13 +189,10 @@ module.exports = {
           components.push(row);
         }
 
-        // コマンドを実行した本人への「非公開」の完了通知（これでモーダルがエラーなく閉じます）
         await interaction.reply({ content: '✅ アナウンスを送信しました。', ephemeral: true });
         
-        // チャンネルに枠付きのアナウンス（Embed）とボタンを本番投稿！
         const msg = await interaction.channel.send({ embeds: [embed], components });
 
-        // 常駐設定の保存
         if (isSticky) {
           const config = loadConfig();
           if (!config.sticky) config.sticky = {};
