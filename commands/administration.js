@@ -49,14 +49,15 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('admin')
     .setDescription('管理用コマンド')
-    // アナウンスコマンド（極限までシンプルに）
+    // アナウンスコマンド
     .addSubcommand(sub =>
       sub.setName('announce')
-        .setDescription('ロール付与ボタン付きのアナウンスを送信（文章はポップアップで入力）')
-        .addRoleOption(o => o.setName('role').setDescription('対象のロール').setRequired(true))
+        .setDescription('アナウンスを送信（文章はポップアップで入力）')
+        // .setRequired(false) にして任意入力にしました！
+        .addRoleOption(o => o.setName('role').setDescription('付与・解除させたいロール（空欄ならボタンなし）').setRequired(false))
         .addBooleanOption(o => o.setName('sticky').setDescription('最下行に常駐（固定）させるか（デフォルト: いいえ）').setRequired(false))
     )
-    // アラームコマンド（入力欄は1つだけ）
+    // アラームコマンド
     .addSubcommand(sub =>
       sub.setName('alarm')
         .setDescription('日本時刻でアラームを設定（複数指定はスペース区切り）')
@@ -76,14 +77,17 @@ module.exports = {
     const subcommand = interaction.options.getSubcommand();
     const config = loadConfig();
 
-    // --- 1. アナウンス（モーダル ＆ 2色ボタン式） ---
+    // --- 1. アナウンス（モーダル ＆ 任意ボタン式） ---
     if (subcommand === 'announce') {
       const role = interaction.options.getRole('role');
       const isSticky = interaction.options.getBoolean('sticky') || false;
+      
+      // ロールが選ばれていない場合は "none" をIDの代わりにしてモーダルに引き渡す
+      const roleIdParam = role ? role.id : 'none';
 
       // 文章を入力するポップアップ（モーダル）を作成
       const modal = new ModalBuilder()
-        .setCustomId(`announce_modal_${role.id}_${isSticky}`)
+        .setCustomId(`announce_modal_${roleIdParam}_${isSticky}`)
         .setTitle('アナウンス内容の入力');
 
       const textInput = new TextInputBuilder()
@@ -94,16 +98,14 @@ module.exports = {
 
       modal.addComponents(new ActionRowBuilder().addComponents(textInput));
 
-      // 画面にモーダルをポンッと出す
       return await interaction.showModal(modal);
     }
 
-    // --- 2. アラーム（1欄に並べるシンプル版） ---
+    // --- 2. アラーム ---
     if (subcommand === 'alarm') {
       const timesInput = interaction.options.getString('times');
       const message = interaction.options.getString('message');
       
-      // スペース（全角・半角）で分割して配列にする
       const timeInputs = timesInput.split(/[\s ]+/).filter(Boolean);
       const registeredTimes = [];
 
