@@ -27,14 +27,12 @@ module.exports = {
       authorAvatar: interaction.user.displayAvatarURL({ dynamic: true })
     };
 
-    // 1段目：参加者向けボタン（絵文字削除）
     const userRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('join_match').setLabel('参加する').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('leave_match').setLabel('削除する').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('edit_power').setLabel('戦力変更').setStyle(ButtonStyle.Primary)
     );
 
-    // 2段目：管理者向けボタン（絵文字削除）
     const adminRow = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('change_method').setLabel('集計方法変更').setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId('calc_match').setLabel('集計').setStyle(ButtonStyle.Danger)
@@ -49,7 +47,8 @@ module.exports = {
     if (!client.matchingData) client.matchingData = new Map();
     if (!client.channelMap) client.channelMap = new Map();
 
-    client.matchingData.set(response.id, data);
+    // 💡 メッセージIDではなく、チャンネルIDを鍵にしてデータを保存します
+    client.matchingData.set(interaction.channelId, data);
     client.channelMap.set(interaction.channelId, response.id);
   },
 };
