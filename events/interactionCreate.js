@@ -38,7 +38,8 @@ module.exports = {
       
       // アナウンス用のロール付与・解除ボタンの処理
       if (interaction.customId.startsWith('ann_btn_')) {
-        const [_, action, roleId] = interaction.customId.split('_');
+        // 分割数を正しく修正（ann, btn, action, roleId になるため4つで受ける）
+        const [_, __, action, roleId] = interaction.customId.split('_');
         
         if (!roleId || roleId === 'none') {
           return interaction.reply({ content: 'このボタンには連動するロールがありません。', ephemeral: true });
@@ -161,14 +162,12 @@ module.exports = {
     if (interaction.isModalSubmit()) {
       
       if (interaction.customId.startsWith('ann_mdl_')) {
-        // ID分割の狂いを完全に修正
         const parts = interaction.customId.split('_');
         const roleId = parts[2];
         const stickyFlag = parts[3];
         const isSticky = stickyFlag === '1';
         const text = interaction.fields.getTextInputValue('announce_text');
 
-        // ロールが実在するかチェック（none以外の場合）
         if (roleId && roleId !== 'none') {
           const roleCheck = await interaction.guild.roles.fetch(roleId).catch(() => null);
           if (!roleCheck) {
@@ -205,7 +204,6 @@ module.exports = {
         return;
       }
 
-      // B. マッチングの参戦登録情報が返ってきた時の処理
       if (interaction.customId === 'modal_match_join') {
         if (!client.matchingData) client.matchingData = new Map();
         let data = client.matchingData.get(interaction.message.id);
