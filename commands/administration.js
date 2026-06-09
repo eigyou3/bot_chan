@@ -141,3 +141,30 @@ module.exports = {
         setTimeout(async () => {
           const channel = await client.channels.fetch(interaction.channelId).catch(() => null);
           if (channel) await channel.send(message);
+
+          const currentConfig = loadConfig();
+          currentConfig.alarms = (currentConfig.alarms || []).filter(a => a.time !== targetTime);
+          saveConfig(currentConfig);
+        }, delay);
+      }
+
+      if (registeredTimes.length === 0) {
+        return interaction.reply({ content: '❌ 時刻の形式が正しくありません。「15:30」や「9:05」のように入力してください。', ephemeral: true });
+      }
+
+      return interaction.reply({ 
+        content: `⏰ 以下の時刻にアラームを設定しました（このチャンネルに通知します）。\n設定時刻: ${registeredTimes.map(t => `**${t}**`).join(', ')}`, 
+        ephemeral: true 
+      });
+    }
+
+    // --- 4. VC通知先設定 ---
+    if (subcommand === 'setvc') {
+      const channel = interaction.options.getChannel('channel');
+      config.vcNotifyChannelId = channel.id;
+      saveConfig(config);
+
+      return interaction.reply({ content: `✅ VC参加の通知先を <#${channel.id}> に設定しました。`, ephemeral: true });
+    }
+  },
+};
