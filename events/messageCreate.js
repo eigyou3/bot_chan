@@ -70,7 +70,7 @@ module.exports = {
       }
     }
 
-    // --- 3. チームマッチングのアナウンス常駐（最下部への再投稿）処理 ---
+    // --- 3. チームマッチングのアナウンス常駐（最下部への再投稿＆データ引っ越し）処理 ---
     if (!client.channelMap) client.channelMap = new Map();
     const activeMessageId = client.channelMap.get(message.channelId);
 
@@ -79,7 +79,7 @@ module.exports = {
         const oldMessage = await message.channel.messages.fetch(activeMessageId).catch(() => null);
         
         if (oldMessage) {
-          // メモリから古いIDに紐づいているマッチングデータを取得
+          // メモリから古いメッセージIDに紐づいているマッチングデータを取得して退避
           if (!client.matchingData) client.matchingData = new Map();
           const currentData = client.matchingData.get(activeMessageId);
 
@@ -93,7 +93,7 @@ module.exports = {
           // チャンネルに紐づく最新のメッセージIDを更新
           client.channelMap.set(message.channelId, newMessage.id);
 
-          // 【修正】データが存在していた場合、新しいメッセージIDを鍵にしてメモリに保存し直す（古いIDのデータは削除）
+          // データが存在していた場合、新しいメッセージIDを鍵にしてメモリに保存し直す（古いIDのデータは削除）
           if (currentData) {
             client.matchingData.set(newMessage.id, currentData);
             client.matchingData.delete(activeMessageId);
