@@ -50,20 +50,16 @@ module.exports = {
 
     if (stickyData) {
       try {
-        // 現在の常駐メッセージを取得
         const oldMessage = await message.channel.messages.fetch(stickyData.messageId).catch(() => null);
         
         if (oldMessage) {
-          // 過去のメッセージを削除
           await oldMessage.delete().catch(() => null);
 
-          // 新しく同じ内容（Embed、ボタン）で一番下に再投稿
           const newMessage = await message.channel.send({
             embeds: oldMessage.embeds,
             components: oldMessage.components
           });
 
-          // 最新のメッセージIDをメモリに保存
           client.stickyMap.set(message.channelId, {
             messageId: newMessage.id,
             text: stickyData.text
@@ -74,20 +70,34 @@ module.exports = {
       }
     }
 
-    // --- 3. チームマッチングのアナウンス常駐（互換性のために残す） ---
+    // --- 3. チームマッチングのアナウンス常駐（最下部への再投稿）処理 ---
     if (!client.channelMap) client.channelMap = new Map();
     const activeMessageId = client.channelMap.get(message.channelId);
 
     if (activeMessageId) {
       try {
         const oldMessage = await message.channel.messages.fetch(activeMessageId).catch(() => null);
+        
         if (oldMessage) {
+          // メモリから古いIDに紐づいているマッチングデータを取得
+          if (!client.matchingData) client.matchingData = new Map();
+          const currentData = client.matchingData.get(activeMessageId);
+
+          // 古いメッセージを削除して一番下に新しく送り直す
           await oldMessage.delete().catch(() => null);
           const newMessage = await message.channel.send({
             embeds: oldMessage.embeds,
             components: oldMessage.components
           });
+
+          // チャンネルに紐づく最新のメッセージIDを更新
           client.channelMap.set(message.channelId, newMessage.id);
+
+          // 【修正】データが存在していた場合、新しいメッセージIDを鍵にしてメモリに保存し直す（古いIDのデータは削除）
+          if (currentData) {
+            client.matchingData.set(newMessage.id, currentData);
+            client.matchingData.delete(activeMessageId);
+          }
         }
       } catch (error) {
         console.error('マッチングメッセージの再投稿に失敗しました:', error);
