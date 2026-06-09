@@ -11,7 +11,6 @@ module.exports = {
     if (message.author.bot) return;
 
     // --- 1. 来場予約（画像生成）の処理 ---
-    // 「数字/数字」または「数字月数字」と「様」または「さん」が含まれているか判定
     const hasDateAndName =
       /[\d０-９]{1,2}[\/／月][\d０-９]{1,2}/.test(message.content) &&
       /様|さん/.test(message.content);
@@ -22,7 +21,6 @@ module.exports = {
 
       if (parsed) {
         try {
-          // 画像を生成（幅1920、高さ1080）
           const buffer = await generateWelcomeImage(parsed, 1920, 1080);
           const file = new AttachmentBuilder(buffer, { name: 'welcome.jpg' });
 
@@ -42,31 +40,53 @@ module.exports = {
         } catch (error) {
           console.error('画像生成または送信中にエラーが発生しました:', error);
         }
-        // 画像生成に反応した場合は、マッチングの再投稿処理を行わずにここで終了
         return;
       }
     }
 
-    // --- 2. チームマッチングのアナウンス常駐（最下部への再投稿）処理 ---
-    if (!client.channelMap) client.channelMap = new Map();
-    const activeMessageId = client.channelMap.get(message.channelId);
+    // --- 2. アナウンスの常駐（最下部への再投稿）処理 ---
+    if (!client.stickyMap) client.stickyMap = new Map();
+    const stickyData = client.stickyMap.get(message.channelId);
 
-    if (activeMessageId) {
+    if (stickyData) {
       try {
-        // 現在の募集メッセージを取得
-        const oldMessage = await message.channel.messages.fetch(activeMessageId).catch(() => null);
+        // 現在の常駐メッセージを取得
+        const oldMessage = await message.channel.messages.fetch(stickyData.messageId).catch(() => null);
         
         if (oldMessage) {
           // 過去のメッセージを削除
           await oldMessage.delete().catch(() => null);
 
-          // 新しく同じ内容で一番下に再投稿
+          // 新しく同じ内容（Embed、ボタン）で一番下に再投稿
           const newMessage = await message.channel.send({
             embeds: oldMessage.embeds,
             components: oldMessage.components
           });
 
-          // チャンネルに紐づく最新のメッセージIDを更新
+          // 最新のメッセージIDをメモリに保存
+          client.stickyMap.set(message.channelId, {
+            messageId: newMessage.id,
+            text: stickyData.text
+          });
+        }
+      } catch (error) {
+        console.error('常駐メッセージの再投稿に失敗しました:', error);
+      }
+    }
+
+    // --- 3. チームマッチングのアナウンス常駐（互換性のために残す） ---
+    if (!client.channelMap) client.channelMap = new Map();
+    const activeMessageId = client.channelMap.get(message.channelId);
+
+    if (activeMessageId) {
+      try {
+        const oldMessage = await message.channel.messages.fetch(activeMessageId).catch(() => null);
+        if (oldMessage) {
+          await oldMessage.delete().catch(() => null);
+          const newMessage = await message.channel.send({
+            embeds: oldMessage.embeds,
+            components: oldMessage.components
+          });
           client.channelMap.set(message.channelId, newMessage.id);
         }
       } catch (error) {
