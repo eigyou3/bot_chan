@@ -68,14 +68,16 @@ module.exports = {
       try {
         const oldMessage = await message.channel.messages.fetch(activeMessageId).catch(() => null);
         if (oldMessage) {
-          // 古いメッセージを削除して、一番下に全く同じ内容で送り直す
+          // 古いメッセージを削除
           await oldMessage.delete().catch(() => null);
+          
+          // 💡【修正】content ではなく embeds をそのまま複製して一番下に送り直します
           const newMessage = await message.channel.send({
-            content: oldMessage.content,
+            embeds: oldMessage.embeds,
             components: oldMessage.components
           });
           
-          // 💡 最新のメッセージIDに記録を上書きするだけ！(元のindex.jsと同じ挙動)
+          // 最新のメッセージIDを記録
           client.matchChannelMap.set(message.channelId, newMessage.id);
         }
       } catch (error) {
