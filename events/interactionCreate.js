@@ -79,7 +79,7 @@ module.exports = {
         // Embedテキストの再構築
         const embed = new EmbedBuilder()
           .setColor('#5865F2')
-          .setDescription(`┃ ${data.text}`);
+          .setDescription(data.text);
 
         if (data.participants.length > 0) {
           // 💡 表示名だけで綺麗にカンマ区切りにする
