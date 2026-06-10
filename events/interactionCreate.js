@@ -1,9 +1,8 @@
-const { EmbedBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
 const CONFIG_PATH = path.join(__dirname, '..', 'config.json');
-const ALLOWED_USERS = ['1088369918069715024', '936419559165026304', '834272659067895838'];
 
 function loadConfig() {
   try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch { return {}; }
@@ -15,6 +14,7 @@ function saveConfig(data) {
 module.exports = {
   name: 'interactionCreate',
   async execute(interaction, client) {
+    // スラッシュコマンドの処理
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
@@ -22,14 +22,9 @@ module.exports = {
       return;
     }
 
-    if (!client.matchingData) client.matchingData = new Map();
-    if (!client.channelMap) client.channelMap = new Map();
-
-    // ==========================================
     // ボタンの処理
-    // ==========================================
     if (interaction.isButton()) {
-      // アナウンスボタンの処理
+      // 既存の通常アナウンス用ボタンの処理
       if (interaction.customId.startsWith('ann_btn_')) {
         const [_, __, action, roleId] = interaction.customId.split('_');
         const role = await interaction.guild.roles.fetch(roleId).catch(() => null);
@@ -45,81 +40,59 @@ module.exports = {
         }
       }
 
-      // 💡【修正】元の index.js と同じく、大元のデータが眠るメッセージIDを特定して取得します
-      const targetMessageId = client.channelMap.get(interaction.channelId) || interaction.message.id;
-      let data = client.matchingData.get(targetMessageId);
-      
-      if (!data) return interaction.reply({ content: '募集データが見つかりません。新しくコマンドを実行し直してください。', ephemeral: true });
+      // ==========================================
+      // 新しいシンプルなマッチング募集ボタンの処理
+      // ==========================================
+      if (interaction.customId === 'match_join' || interaction.customId === 'match_leave') {
+        if (!client.matchStorage) client.matchStorage = new Map();
+        if (!client.matchChannelMap) client.matchChannelMap = new Map();
 
-      // 1. 参加ボタン
-      if (interaction.customId === 'join_match') {
-        const exists = data.participants.some(p => p.id === interaction.user.id);
-        if (exists) return interaction.reply({ content: '既に登録されています。', ephemeral: true });
+        // 💡 チャンネルIDを鍵にして、常に安定した大元データを直接取得
+        const data = client.matchStorage.get(interaction.channelId);
+        if (!data) return interaction.reply({ content: '募集データが見つかりません。新しくコマンドを実行し直してください。', ephemeral: true });
 
-        const modal = new ModalBuilder().setCustomId('modal_match_join').setTitle('参戦登録');
-        modal.addComponents(
-          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('input_power').setLabel('戦力（例: 23.5M）').setStyle(TextInputStyle.Short).setRequired(true)),
-          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('input_job').setLabel('ジョブ・役職').setStyle(TextInputStyle.Short).setRequired(false))
-        );
-        return await interaction.showModal(modal);
-      }
+        const userId = interaction.user.id;
+        const role = await interaction.guild.roles.fetch(data.roleId).catch(() => null);
+        const member = await interaction.guild.members.fetch(userId).catch(() => null);
 
-      // 2. 削除ボタン
-      if (interaction.customId === 'leave_match') {
-        data.participants = data.participants.filter(p => p.id !== interaction.user.id);
-        const { buildAnnounceEmbed } = require('../utils/teamMaker');
-        await interaction.deferUpdate();
-        await interaction.message.edit({ embeds: [buildAnnounceEmbed(data)] });
-        return;
-      }
-
-      // 3. 戦力変更ボタン
-      if (interaction.customId === 'edit_power') {
-        const participant = data.participants.find(p => p.id === interaction.user.id);
-        if (!participant) {
-          return await interaction.reply({ content: '❌ まだ参加登録されていません。「参加する」ボタンから登録してください。', ephemeral: true });
+        if (!role || !member) {
+          return interaction.reply({ content: 'ロールまたはメンバーの情報が取得できませんでした。', ephemeral: true });
         }
 
-        const modal = new ModalBuilder().setCustomId('modal_match_edit').setTitle('戦力変更');
-        modal.addComponents(
-          new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('input_power').setLabel('新しい戦力').setStyle(TextInputStyle.Short).setValue(participant.power.toString()).setRequired(true))
-        );
-        return await interaction.showModal(modal);
-      }
+        if (interaction.customId === 'match_join') {
+          // 参加処理：重複していなければ配列に追加
+          if (!data.participants.includes(userId)) {
+            data.participants.push(userId);
+          }
+          // ロールを付与
+          await member.roles.add(role).catch(() => null);
+        } else if (interaction.customId === 'match_leave') {
+          // 辞退処理：配列から削除
+          data.participants = data.participants.filter(id => id !== userId);
+          // ロールを解除
+          await member.roles.remove(role).catch(() => null);
+        }
 
-      // 4. 集計方法変更ボタン（管理者のみ）
-      if (interaction.customId === 'change_method') {
-        if (!ALLOWED_USERS.includes(interaction.user.id)) return interaction.reply({ content: '権限がありません。', ephemeral: true });
-        data.sortMethod = data.sortMethod === 'snake' ? 'balance' : 'snake';
-        data.sortLabel = data.sortMethod === 'snake' ? 'スネーク方式' : '平均化方式';
-        
-        const { buildAnnounceEmbed } = require('../utils/teamMaker');
+        // 💡 参加者の名前（メンション）を綺麗に並べるテキストの組み立て
+        let newContent = `┃ ${data.text}\n[対象ロール: <@&${data.roleId}>]`;
+        if (data.participants.length > 0) {
+          const mentions = data.participants.map(id => `<@${id}>`).join(', ');
+          newContent += `\n┃--\n┃現在の参加者\n┃ ${mentions}`;
+        }
+
+        // 応答を確定させつつ、最新の固定メッセージの内容を更新
         await interaction.deferUpdate();
-        await interaction.message.edit({ embeds: [buildAnnounceEmbed(data)] });
-        return;
-      }
-
-      // 5. 集計ボタン（管理者のみ）
-      if (interaction.customId === 'calc_match') {
-        if (!ALLOWED_USERS.includes(interaction.user.id)) return interaction.reply({ content: '権限がありません。', ephemeral: true });
-        if (data.participants.length === 0) return interaction.reply({ content: '参加者がいません。', ephemeral: true });
-
-        const { makeTeams, formatPower } = require('../utils/teamMaker');
-        const { teams, remainderMembers } = makeTeams(data.participants, data.sortMethod);
-        let desc = `集計方法：**${data.sortLabel}**\n\n`;
-        teams.forEach((team, i) => {
-          const total = team.reduce((s, p) => s + p.power, 0);
-          const members = team.map(p => `${p.name}┃${formatPower(p.power)}┃${p.job}`).join('\n');
-          desc += `**チーム${i + 1}**（総戦力：${formatPower(total)}）\n${members}\n\n`;
-        });
-        await interaction.reply({ embeds: [new EmbedBuilder().setColor('#5865F2').setDescription(desc)] });
+        
+        const activeMessageId = client.matchChannelMap.get(interaction.channelId);
+        const targetMsg = await interaction.channel.messages.fetch(activeMessageId).catch(() => null);
+        if (targetMsg) {
+          await targetMsg.edit({ content: newContent });
+        }
         return;
       }
     }
 
-    // ==========================================
-    // モーダル（フォーム送信）の処理
-    // ==========================================
+    // 通常アナウンス用のモーダル処理
     if (interaction.isModalSubmit()) {
       if (interaction.customId.startsWith('ann_mdl_')) {
         const parts = interaction.customId.split('_');
@@ -146,36 +119,6 @@ module.exports = {
           saveConfig(config);
           if (!client.stickyMap) client.stickyMap = new Map();
           client.stickyMap.set(interaction.channelId, { messageId: msg.id, text });
-        }
-        return;
-      }
-
-      // マッチング登録・変更のモーダル処理
-      if (interaction.customId === 'modal_match_join' || interaction.customId === 'modal_match_edit') {
-        // 💡 モーダル送信時も、常にchannelMapから最新のメッセージIDを経由してデータを取得
-        const targetMessageId = client.channelMap.get(interaction.channelId);
-        const data = client.matchingData.get(targetMessageId);
-
-        if (!data) return interaction.reply({ content: '募集データが見つかりません。', ephemeral: true });
-
-        const rawPower = interaction.fields.getTextInputValue('input_power');
-        const { parsePower, buildAnnounceEmbed } = require('../utils/teamMaker');
-        const power = parsePower(rawPower);
-
-        if (interaction.customId === 'modal_match_join') {
-          const job = interaction.fields.getTextInputValue('input_job') || '未設定';
-          data.participants.push({ id: interaction.user.id, name: interaction.user.username, power, job });
-        } else {
-          const participant = data.participants.find(p => p.id === interaction.user.id);
-          if (participant) participant.power = power;
-        }
-
-        const targetMsg = await interaction.channel.messages.fetch(targetMessageId).catch(() => null);
-        if (targetMsg) {
-          await interaction.deferUpdate();
-          await targetMsg.edit({ embeds: [buildAnnounceEmbed(data)] });
-        } else {
-          await interaction.reply({ content: 'メッセージの更新に失敗しました。', ephemeral: true });
         }
       }
     }
