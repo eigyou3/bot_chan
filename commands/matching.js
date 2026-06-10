@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -18,24 +18,24 @@ module.exports = {
     const text = interaction.options.getString('text');
     const role = interaction.options.getRole('role');
 
-    // 💡 データの引っ越しバグを防ぐため、「チャンネルID」を鍵にしてメモリ（Map）で超シンプルに管理
     const data = {
       text: text,
       roleId: role.id,
-      participants: [] // 参加者のユーザーID（文字列の配列）
+      participants: [] // { id, displayName } のオブジェクトを入れていく配列
     };
 
-    // ボタンは「参加する！」と「辞退する」の2つだけ
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('match_join').setLabel('参加する！').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('match_leave').setLabel('辞退する').setStyle(ButtonStyle.Secondary)
     );
 
-    // 最初のメッセージ表示
-    const initialContent = `┃ ${text}\n[対象ロール: <@&${role.id}>]`;
+    // 💡 1. 見た目を綺麗な枠付きEmbedに変更
+    const embed = new EmbedBuilder()
+      .setColor('#5865F2')
+      .setDescription(`┃ ${text}`); // 💡 2. 対象ロールのテキストを消去
 
     const response = await interaction.reply({
-      content: initialContent,
+      embeds: [embed],
       components: [row],
       fetchReply: true
     });
@@ -43,7 +43,6 @@ module.exports = {
     if (!client.matchStorage) client.matchStorage = new Map();
     if (!client.matchChannelMap) client.matchChannelMap = new Map();
 
-    // チャンネルに対して1つの募集データを紐付けます
     client.matchStorage.set(interaction.channelId, data);
     client.matchChannelMap.set(interaction.channelId, response.id);
   },
