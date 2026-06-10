@@ -3,7 +3,7 @@ const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Embed
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('match')
-    .setDescription('ロール付与付きの参戦募集を開始します')
+    .setDescription('ロール付与付きの参戦募集を開始します（古いロールは自動リセットされます）')
     .addStringOption(option =>
       option.setName('text')
         .setDescription('募集本文を入力してください')
@@ -15,13 +15,35 @@ module.exports = {
         .setRequired(true)
     ),
   async execute(interaction, client) {
+    // 処理に時間がかかる場合（人数が多い時など）にDiscord側がタイムアウトするのを防ぐ
+    await interaction.deferReply();
+
     const text = interaction.options.getString('text');
     const role = interaction.options.getRole('role');
+
+
+    try {
+      // サーバー内の最新のメンバー情報をキャッシュ（または取得）する
+      await interaction.guild.members.fetch();
+      
+      // 指定されたロールを持っているメンバーを全員抽出
+      const membersWithRole = role.members;
+
+      if (membersWithRole.size > 0) {
+        // 全員からロールを一斉に削除
+        for (const [memberId, member] of membersWithRole) {
+          await member.roles.remove(role).catch(() => null);
+        }
+      }
+    } catch (error) {
+      console.error('古いロールのリセット処理に失敗しました:', error);
+    }
+    // ==========================================
 
     const data = {
       text: text,
       roleId: role.id,
-      participants: [] // { id, displayName } のオブジェクトを入れていく配列
+      participants: [] // 毎週ここもまっさらな状態でスタート
     };
 
     const row = new ActionRowBuilder().addComponents(
@@ -29,12 +51,12 @@ module.exports = {
       new ButtonBuilder().setCustomId('match_leave').setLabel('辞退する').setStyle(ButtonStyle.Secondary)
     );
 
-    // 💡 1. 見た目を綺麗な枠付きEmbedに変更
     const embed = new EmbedBuilder()
       .setColor('#5865F2')
-      .setDescription(`┃ ${text}`); // 💡 2. 対象ロールのテキストを消去
+      .setDescription(text);
 
-    const response = await interaction.reply({
+    // deferReply を使っているので、reply ではなく editReply でメッセージを出します
+    const response = await interaction.editReply({
       embeds: [embed],
       components: [row],
       fetchReply: true
