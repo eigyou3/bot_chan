@@ -37,14 +37,11 @@ module.exports = {
         }
       }
 
-      // ==========================================
-      // マッチング募集ボタンの処理 (修正版)
-      // ==========================================
-      if (interaction.customId === 'match_join' || interaction.customId === 'match_leave') {
-        if (!client.matchStorage) client.matchStorage = new Map();
-        if (!client.matchChannelMap) client.matchChannelMap = new Map();
+      if (interaction.customId === 'entry_join' || interaction.customId === 'entry_leave') {
+        if (!client.entryStorage) client.entryStorage = new Map();
+        if (!client.entryChannelMap) client.entryChannelMap = new Map();
 
-        const data = client.matchStorage.get(interaction.channelId);
+        const data = client.entryStorage.get(interaction.channelId);
         if (!data) return interaction.reply({ content: '募集データが見つかりません。', ephemeral: true });
 
         const userId = interaction.user.id;
@@ -55,42 +52,34 @@ module.exports = {
           return interaction.reply({ content: 'エラーが発生しました。', ephemeral: true });
         }
 
-        // 💡 3. サーバー内の表示名（ニックネーム等）を取得
         const displayName = member.displayName;
         let replyContent = '';
 
-        if (interaction.customId === 'match_join') {
-          // 重複チェック（IDで判定）
+        if (interaction.customId === 'entry_join') {
           if (!data.participants.some(p => p.id === userId)) {
             data.participants.push({ id: userId, name: displayName });
           }
           await member.roles.add(role).catch(() => null);
-          
-          // 💡 4. 画像のような通知メッセージをセット
           replyContent = `✅ **${displayName}** として参加登録し、<@&${data.roleId}> を付与しました！`;
 
-        } else if (interaction.customId === 'match_leave') {
+        } else if (interaction.customId === 'entry_leave') {
           data.participants = data.participants.filter(p => p.id !== userId);
           await member.roles.remove(role).catch(() => null);
-          
           replyContent = `🗑️ 参加を辞退し、<@&${data.roleId}> を解除しました。`;
         }
 
-        // Embedテキストの再構築
         const embed = new EmbedBuilder()
           .setColor('#5865F2')
           .setDescription(data.text);
 
         if (data.participants.length > 0) {
-          // 💡 表示名だけで綺麗にカンマ区切りにする
           const names = data.participants.map(p => p.name).join(', ');
           embed.addFields({ name: '現在の参加者', value: names });
         }
 
-        // 💡 4. 本人だけにポップアップ通知を送りつつ、メッセージ全体をEmbedで更新
         await interaction.reply({ content: replyContent, ephemeral: true });
 
-        const activeMessageId = client.matchChannelMap.get(interaction.channelId);
+        const activeMessageId = client.entryChannelMap.get(interaction.channelId);
         const targetMsg = await interaction.channel.messages.fetch(activeMessageId).catch(() => null);
         if (targetMsg) {
           await targetMsg.edit({ embeds: [embed] });
