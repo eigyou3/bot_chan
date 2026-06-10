@@ -1,54 +1,49 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { buildAnnounceEmbed } = require('../utils/teamMaker');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('match')
-    .setDescription('チームマッチングを開始します')
+    .setDescription('ロール付与付きの参戦募集を開始します')
     .addStringOption(option =>
-      option.setName('sort')
-        .setDescription('集計方法を選択')
+      option.setName('text')
+        .setDescription('募集本文を入力してください')
         .setRequired(true)
-        .addChoices(
-          { name: 'バランス', value: 'balance' },
-          { name: 'スネーク', value: 'snake' }
-        )
+    )
+    .addRoleOption(option =>
+      option.setName('role')
+        .setDescription('参加者に付与するロールを選択してください')
+        .setRequired(true)
     ),
   async execute(interaction, client) {
-    const sortMethod = interaction.options.getString('sort');
-    const sortLabel = sortMethod === 'snake' ? 'スネーク方式' : '平均化方式';
+    const text = interaction.options.getString('text');
+    const role = interaction.options.getRole('role');
 
+    // 💡 データをチャンネルIDを鍵にして、最もシンプルに管理します
     const data = {
-      sortMethod,
-      sortLabel,
-      participants: [],
-      authorId: interaction.user.id,
-      authorTag: interaction.user.tag,
-      authorAvatar: interaction.user.displayAvatarURL({ dynamic: true })
+      text: text,
+      roleId: role.id,
+      participants: [] // 参加者のユーザーIDを入れていく配列
     };
 
-    const userRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('join_match').setLabel('参加する').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('leave_match').setLabel('削除する').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('edit_power').setLabel('戦力変更').setStyle(ButtonStyle.Primary)
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('match_join').setLabel('参加する！').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('match_leave').setLabel('辞退する').setStyle(ButtonStyle.Secondary)
     );
 
-    const adminRow = new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('change_method').setLabel('集計方法変更').setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId('calc_match').setLabel('集計').setStyle(ButtonStyle.Danger)
-    );
+    // 最初の表示テキスト
+    const content = `┃ ${text}\n[対象ロール: <@&${role.id}>]`;
 
     const response = await interaction.reply({
-      embeds: [buildAnnounceEmbed(data)],
-      components: [userRow, adminRow],
+      content: content,
+      components: [row],
       fetchReply: true
     });
 
-    if (!client.matchingData) client.matchingData = new Map();
-    if (!client.channelMap) client.channelMap = new Map();
+    if (!client.matchStorage) client.matchStorage = new Map();
+    if (!client.matchChannelMap) client.matchChannelMap = new Map();
 
-    // 💡 メッセージIDではなく、チャンネルIDを鍵にしてデータを保存します
-    client.matchingData.set(interaction.channelId, data);
-    client.channelMap.set(interaction.channelId, response.id);
+    // チャンネルごとに1つの募集データだけをシンプルに保持
+    client.matchStorage.set(interaction.channelId, data);
+    client.matchChannelMap.set(interaction.channelId, response.id);
   },
 };
