@@ -1,16 +1,13 @@
 {
-  "name": "integrated-discord-bot",
+  "name": "bot_chan",
   "version": "1.0.0",
-  "description": "3つのBotを統合した高機能Discord Bot",
+  "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node deploy.js && node index.js"
+    "start": "node index.js"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^0.1.44",
-    "discord.js": "^14.15.3"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "canvas": "^2.11.2",
+    "discord.js": "^14.14.1"
   }
 }
