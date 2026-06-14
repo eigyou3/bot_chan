@@ -16,18 +16,30 @@ module.exports = {
     ),
 
   async execute(interaction, client) {
+    await interaction.deferReply();
+
     const text = interaction.options.getString('text');
     const role = interaction.options.getRole('role');
 
+    try {
+      await interaction.guild.members.fetch({ withPresences: false });
+    } catch (error) {
+      console.error(error);
+    }
+
     const initialParticipants = [];
-    role.members.forEach(member => {
-      if (!member.user.bot) {
-        initialParticipants.push({
-          id: member.id,
-          name: member.displayName
-        });
-      }
-    });
+    const targetRole = await interaction.guild.roles.fetch(role.id);
+    
+    if (targetRole) {
+      targetRole.members.forEach(member => {
+        if (!member.user.bot) {
+          initialParticipants.push({
+            id: member.id,
+            name: member.displayName
+          });
+        }
+      });
+    }
 
     const data = {
       text: text,
@@ -56,7 +68,7 @@ module.exports = {
       embed.addFields({ name: '現在の参加者', value: names });
     }
 
-    const response = await interaction.reply({
+    const response = await interaction.editReply({
       embeds: [embed],
       components: [row],
       fetchReply: true
