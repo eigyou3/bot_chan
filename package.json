@@ -1,13 +1,12 @@
 {
-  "name": "bot_chan",
+  "name": "bot-chan",
   "version": "1.0.0",
-  "description": "",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "discord.js": "^14.14.1",
-    "skia-canvas": "^1.0.2"
+    "@napi-rs/canvas": "^0.1.44"
   }
 }
