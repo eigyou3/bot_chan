@@ -13,7 +13,6 @@ module.exports = {
     .addStringOption(o => o.setName('text').setDescription('任意の追加テキスト（なければ空欄）').setRequired(false)),
 
   async execute(interaction, client) {
-    // 💡 実行されたサーバーのIDが、指定したIDと違っていればその時点で処理を終了させる
     if (interaction.guildId !== ALLOWED_GUILD_ID) {
       return interaction.reply({ content: '❌ このサーバーではこのコマンドを使用できません。', ephemeral: true });
     }
