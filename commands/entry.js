@@ -16,10 +16,12 @@ module.exports = {
     ),
 
   async execute(interaction, client) {
-    await interaction.deferReply();
+    // 💡 誰が使ったか非表示にするため、最初から ephemeral: true でコマンド自体への応答を完了させる
+    await interaction.reply({ content: '✅ エントリー募集を開始しました。', ephemeral: true });
 
     const text = interaction.options.getString('text');
     const role = interaction.options.getRole('role');
+    const channel = interaction.channel;
 
     try {
       await interaction.guild.members.fetch({ withPresences: false });
@@ -61,23 +63,24 @@ module.exports = {
 
     const embed = new EmbedBuilder()
       .setColor('#5865F2')
-      .setDescription(text);
+      .setDescription(text); // 💡 入力された任意のテキストがそのまま反映されます
 
     if (data.participants.length > 0) {
       const names = data.participants.map(p => p.name).join(', ');
       embed.addFields({ name: '現在の参加者', value: names });
     }
 
-    const response = await interaction.editReply({
+    // 💡 interaction.editReply ではなく、チャンネルに直接新規メッセージとして送信
+    const response = await channel.send({
       embeds: [embed],
-      components: [row],
-      fetchReply: true
+      components: [row]
     });
 
     if (!client.entryStorage) client.entryStorage = new Map();
     if (!client.entryChannelMap) client.entryChannelMap = new Map();
 
-    client.entryStorage.set(interaction.channelId, data);
-    client.entryChannelMap.set(interaction.channelId, response.id);
+    // 💡 チャンネルIDをキーにして、生成したメッセージのデータを登録（常駐処理用）
+    client.entryStorage.set(channel.id, data);
+    client.entryChannelMap.set(channel.id, response.id);
   },
 };
