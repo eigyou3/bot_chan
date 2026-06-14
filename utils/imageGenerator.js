@@ -1,7 +1,7 @@
 const { createCanvas, loadImage, registerFont } = require('canvas');
 const path = require('path');
 
-const fontPath = path.join(__dirname, '..', 'fonts', 'Noto_Sans_JP', 'NotoSansJP-Bold.ttf');
+const fontPath = path.join(__dirname, '..', 'fonts', 'Noto_Sans_JP', 'NotoSansJP-VariableFont_wght.ttf');
 registerFont(fontPath, { family: 'NotoSans' });
 
 function parseVisitorMessage(content) {
@@ -25,8 +25,11 @@ function parseVisitorMessage(content) {
     extraText = filterLines[0];
   }
 
+  const currentYear = new Date().getFullYear();
+  const formattedDate = `${currentYear}/${dateMatch[1].padStart(2, '0')}/${dateMatch[2].padStart(2, '0')}`;
+
   return {
-    date: `2026/${dateMatch[1].padStart(2, '0')}/${dateMatch[2].padStart(2, '0')}`,
+    date: formattedDate,
     time: timeMatch ? `${timeMatch[1].padStart(2, '0')}:${timeMatch[2].padStart(2, '0')}` : '13:00',
     name: nameMatch[1],
     extraText: extraText
@@ -41,6 +44,11 @@ async function generateWelcomeImage(parsed, width = 1920, height = 1080) {
     const bgPath = path.join(__dirname, '..', 'assets', 'welcome_bg.jpg');
     const background = await loadImage(bgPath);
     ctx.drawImage(background, 0, 0, width, height);
+
+    // 💡 文字を読みやすくし、背景の既存文字を隠すために、白いフィルターを上から重ねる
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 90%の不透明度の白
+    ctx.fillRect(0, 0, width, height);
+
   } catch (error) {
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, width, height);
@@ -51,22 +59,26 @@ async function generateWelcomeImage(parsed, width = 1920, height = 1080) {
 
   const centerX = width / 2;
 
+  // 1. Welcome
+  ctx.fillStyle = '#111111';
+  ctx.font = '100px "NotoSans"';
+  ctx.fillText('Welcome', centerX, 300);
+
+  // 2. 日付 (2026/06/14)
   ctx.fillStyle = '#333333';
-  ctx.font = '90px "NotoSans"';
-  ctx.fillText('Welcome', centerX, 350);
+  ctx.font = '70px "NotoSans"';
+  ctx.fillText(parsed.date, centerX, 460);
 
-  ctx.fillStyle = '#444444';
-  ctx.font = '65px "NotoSans"';
-  ctx.fillText(parsed.date, centerX, 490);
+  // 3. 時間 山田 様
+  ctx.fillStyle = '#111111';
+  ctx.font = '80px "NotoSans"';
+  ctx.fillText(`${parsed.time} ${parsed.name} 様`, centerX, 590);
 
-  ctx.fillStyle = '#222222';
-  ctx.font = '75px "NotoSans"';
-  ctx.fillText(`${parsed.time} ${parsed.name} 様`, centerX, 610);
-
+  // 4. 任意のテキスト（なければ空白）
   if (parsed.extraText) {
     ctx.fillStyle = '#555555';
-    ctx.font = '50px "NotoSans"';
-    ctx.fillText(parsed.extraText, centerX, 750);
+    ctx.font = '55px "NotoSans"';
+    ctx.fillText(parsed.extraText, centerX, 760);
   }
 
   return canvas.toBuffer('image/jpeg');
