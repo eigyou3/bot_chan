@@ -45,9 +45,10 @@ async function generateWelcomeImage(parsed, width = 1920, height = 1080) {
     const background = await loadImage(bgPath);
     ctx.drawImage(background, 0, 0, width, height);
 
-    // 💡 文字を読みやすくし、背景の既存文字を隠すために、白いフィルターを上から重ねる
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // 90%の不透明度の白
-    ctx.fillRect(0, 0, width, height);
+    // 💡 既存の文字や線を上書きして消すため、中央の白いカード部分だけを白四角でクリアする
+    // 枠のサイズや位置は、お使いの背景画像に合わせて微調整してください
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(400, 150, 1120, 780);
 
   } catch (error) {
     ctx.fillStyle = '#FFFFFF';
@@ -62,23 +63,23 @@ async function generateWelcomeImage(parsed, width = 1920, height = 1080) {
   // 1. Welcome
   ctx.fillStyle = '#111111';
   ctx.font = '100px "NotoSans"';
-  ctx.fillText('Welcome', centerX, 300);
+  ctx.fillText('Welcome', centerX, 320);
 
   // 2. 日付 (2026/06/14)
   ctx.fillStyle = '#333333';
   ctx.font = '70px "NotoSans"';
-  ctx.fillText(parsed.date, centerX, 460);
+  ctx.fillText(parsed.date, centerX, 480);
 
   // 3. 時間 山田 様
   ctx.fillStyle = '#111111';
   ctx.font = '80px "NotoSans"';
-  ctx.fillText(`${parsed.time} ${parsed.name} 様`, centerX, 590);
+  ctx.fillText(`${parsed.time} ${parsed.name} 様`, centerX, 610);
 
   // 4. 任意のテキスト（なければ空白）
   if (parsed.extraText) {
     ctx.fillStyle = '#555555';
     ctx.font = '55px "NotoSans"';
-    ctx.fillText(parsed.extraText, centerX, 760);
+    ctx.fillText(parsed.extraText, centerX, 780);
   }
 
   return canvas.toBuffer('image/jpeg');
