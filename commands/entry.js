@@ -19,10 +19,20 @@ module.exports = {
     const text = interaction.options.getString('text');
     const role = interaction.options.getRole('role');
 
+    const initialParticipants = [];
+    role.members.forEach(member => {
+      if (!member.user.bot) {
+        initialParticipants.push({
+          id: member.id,
+          name: member.displayName
+        });
+      }
+    });
+
     const data = {
       text: text,
       roleId: role.id,
-      participants: []
+      participants: initialParticipants
     };
 
     const row = new ActionRowBuilder().addComponents(
@@ -40,6 +50,11 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setColor('#5865F2')
       .setDescription(text);
+
+    if (data.participants.length > 0) {
+      const names = data.participants.map(p => p.name).join(', ');
+      embed.addFields({ name: '現在の参加者', value: names });
+    }
 
     const response = await interaction.reply({
       embeds: [embed],
