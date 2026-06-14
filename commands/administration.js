@@ -80,7 +80,6 @@ module.exports = {
       const roleIdParam = role ? role.id : 'none';
       const stickyParam = isSticky ? '1' : '0';
 
-      // 📝 モーダルID全体の長さを限界まで削り、文字数制限（100文字）を絶対に超えないように修正
       const modal = new ModalBuilder()
         .setCustomId(`ann_mdl_${roleIdParam}_${stickyParam}`)
         .setTitle('アナウンス内容の入力');
@@ -136,9 +135,11 @@ module.exports = {
     }
 
     if (subcommand === 'setvc') {
-      config.vcNotifyChannelId = interaction.channelId;
-      saveConfig(config);
-      return interaction.reply({ content: `✅ VC参加の通知先をこのチャンネル（ <#${interaction.channelId}> ）に設定しました。`, ephemeral: true });
+      if (!client.vcNotifyMap) client.vcNotifyMap = new Map();
+
+      client.vcNotifyMap.set(interaction.guildId, interaction.channelId);
+
+      return interaction.reply({ content: `✅ VC参加の通知先をこのサーバーのこのチャンネル（ <#${interaction.channelId}> ）に設定しました。`, ephemeral: true });
     }
   },
 };
