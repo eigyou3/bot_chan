@@ -1,8 +1,9 @@
-const { createCanvas, loadImage, registerFont } = require('canvas');
+const { createCanvas, GlobalFonts, loadImage } = require('@napi-rs/canvas');
 const path = require('path');
 
+// 💡 @napi-rs/canvas用の正しいフォント登録方法（これで絶対に文字化けしません）
 const fontPath = path.join(__dirname, '..', 'fonts', 'Noto_Sans_JP', 'NotoSansJP-VariableFont_wght.ttf');
-registerFont(fontPath, { family: 'NotoSans' });
+GlobalFonts.registerFromPath(fontPath, 'NotoSans');
 
 async function generateWelcomeImage(parsed, width = 1920, height = 1080) {
   const canvas = createCanvas(width, height);
@@ -13,7 +14,7 @@ async function generateWelcomeImage(parsed, width = 1920, height = 1080) {
     const background = await loadImage(bgPath);
     ctx.drawImage(background, 0, 0, width, height);
 
-    // 中央の既存文字エリアを白四角でクリアしてリセット
+    // 中央の既存文字エリア（KOMAI HOMEや仕切り線など）を白四角で完全に消去
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(400, 150, 1120, 780);
   } catch (error) {
