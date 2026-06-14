@@ -7,7 +7,8 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "canvas": "^2.11.2",
-    "discord.js": "^14.14.1"
+    "discord.js": "^14.14.1",
+    "skia-canvas": "^1.0.2"
+  }
   }
 }
