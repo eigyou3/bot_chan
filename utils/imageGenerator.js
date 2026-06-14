@@ -1,7 +1,7 @@
 const { createCanvas, loadImage, registerFont } = require('canvas');
 const path = require('path');
 
-const fontPath = path.join(__dirname, '..', 'fonts', 'NotoSansJP-Bold.ttf');
+const fontPath = path.join(__dirname, '..', 'fonts', 'Noto_Sans_JP', 'NotoSansJP-Bold.ttf');
 registerFont(fontPath, { family: 'NotoSans' });
 
 function parseVisitorMessage(content) {
