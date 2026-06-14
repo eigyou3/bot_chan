@@ -1,6 +1,8 @@
 const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } = require('discord.js');
 const { generateWelcomeImage } = require('../utils/imageGenerator.js');
 
+const ALLOWED_GUILD_ID = '1496054346385723472';
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('welcome')
@@ -11,6 +13,11 @@ module.exports = {
     .addStringOption(o => o.setName('text').setDescription('任意の追加テキスト（なければ空欄）').setRequired(false)),
 
   async execute(interaction, client) {
+    // 💡 実行されたサーバーのIDが、指定したIDと違っていればその時点で処理を終了させる
+    if (interaction.guildId !== ALLOWED_GUILD_ID) {
+      return interaction.reply({ content: '❌ このサーバーではこのコマンドを使用できません。', ephemeral: true });
+    }
+
     await interaction.deferReply();
 
     const date = interaction.options.getString('date');
@@ -18,7 +25,6 @@ module.exports = {
     const name = interaction.options.getString('name');
     const extraText = interaction.options.getString('text') || '';
 
-    // 年を自動取得してフォーマットを整える
     const currentYear = new Date().getFullYear();
     const formattedDate = date.includes('/') ? `${currentYear}/${date}` : `${currentYear}/${date.replace(/[^\d]/g, '/')}`;
 
