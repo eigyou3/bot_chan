@@ -1,94 +1,78 @@
-const { createCanvas, loadImage } = require('@napi-rs/canvas');
+const { createCanvas, loadImage, registerFont } = require('canvas');
+const path = require('path');
 
-const COMPANY_NAME = '- KOMAI HOME -';
-const BG_OPACITY = 0.15;
-const WELCOME_MESSAGE = 'ご来場お待ちしておりました。\n担当スタッフがすぐにご案内いたします。';
+const fontPath = path.join(__dirname, '..', 'fonts', 'NotoSansJP-Bold.ttf');
+registerFont(fontPath, { family: 'NotoSans' });
 
-// メッセージから日時と名前を抽出
 function parseVisitorMessage(content) {
-  const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
-  if (lines.length === 0) return null;
+  const dateRegex = /([\d０-９]{1,2})[\/／月]([\d０-９]{1,2})/;
+  const timeRegex = /([\d０-９]{1,2})[:：時]([\d０-９]{1,2})/;
+  const nameRegex = /([^\s\n]+?)(?:様|さん)/;
 
-  const firstLine = lines[0];
-  const tokens = firstLine.split(/\s+/);
-  if (tokens.length < 3) return null;
+  const dateMatch = content.match(dateRegex);
+  const timeMatch = content.match(timeRegex);
+  const nameMatch = content.match(nameRegex);
 
-  let dateStr = tokens[0];
-  let timeStr = tokens[1];
-  let nameStr = tokens.slice(2).join(' ');
+  if (!dateMatch || !nameMatch) return null;
 
-  // 全角英数を半角に変換
-  dateStr = dateStr.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/／/g, '/');
-  timeStr = timeStr.replace(/[：０-９]/g, c => c === '：' ? ':' : String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  const lines = content.split('\n').map(line => line.trim()).filter(Boolean);
+  let extraText = '';
+  
+  const filterLines = lines.filter(line => 
+    !dateRegex.test(line) && !nameRegex.test(line) && !/ウェルカム|予約/.test(line)
+  );
+  if (filterLines.length > 0) {
+    extraText = filterLines[0];
+  }
 
   return {
-    date: dateStr,
-    time: timeStr,
-    name: nameStr,
+    date: `2026/${dateMatch[1].padStart(2, '0')}/${dateMatch[2].padStart(2, '0')}`,
+    time: timeMatch ? `${timeMatch[1].padStart(2, '0')}:${timeMatch[2].padStart(2, '0')}` : '13:00',
+    name: nameMatch[1],
+    extraText: extraText
   };
 }
 
-// 案内画像の生成
-async function generateWelcomeImage(data, width = 1920, height = 1080) {
+async function generateWelcomeImage(parsed, width = 1920, height = 1080) {
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
-  // 背景色の塗りつぶし
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillRect(0, 0, width, height);
+  try {
+    const bgPath = path.join(__dirname, '..', 'assets', 'welcome_bg.jpg');
+    const background = await loadImage(bgPath);
+    ctx.drawImage(background, 0, 0, width, height);
+  } catch (error) {
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, width, height);
+  }
 
-  // 背景の円装飾
-  ctx.fillStyle = `rgba(135, 206, 235, ${BG_OPACITY})`;
-  ctx.beginPath();
-  ctx.arc(width * 0.1, height * 0.2, 400, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
 
-  ctx.fillStyle = `rgba(255, 182, 193, ${BG_OPACITY})`;
-  ctx.beginPath();
-  ctx.arc(width * 0.9, height * 0.8, 500, 0, Math.PI * 2);
-  ctx.fill();
+  const centerX = width / 2;
 
-  // 会社名
   ctx.fillStyle = '#333333';
-  ctx.font = '900 40px NotoSansJP-Black';
-  ctx.textAlign = 'center';
-  ctx.fillText(COMPANY_NAME, width / 2, 180);
+  ctx.font = '90px "NotoSans"';
+  ctx.fillText('Welcome', centerX, 350);
 
-  // メインメッセージ
-  ctx.fillStyle = '#555555';
-  ctx.font = '100 36px NotoSansJP-Thin';
-  ctx.textAlign = 'center';
-  
-  const msgLines = WELCOME_MESSAGE.split('\n');
-  ctx.fillText(msgLines[0], width / 2, 280);
-  ctx.fillText(msgLines[1], width / 2, 340);
+  ctx.fillStyle = '#444444';
+  ctx.font = '65px "NotoSans"';
+  ctx.fillText(parsed.date, centerX, 490);
 
-  // 日時
-  const displayDate = data.date.replace('/', '月') + '日';
-  const displayTime = data.time.replace(':', '時') + '分';
-  ctx.fillStyle = '#666666';
-  ctx.font = '100 48px NotoSansJP-Thin';
-  ctx.textAlign = 'center';
-  ctx.fillText(`${displayDate}  ${displayTime}`, width / 2, height / 2 - 20);
+  ctx.fillStyle = '#222222';
+  ctx.font = '75px "NotoSans"';
+  ctx.fillText(`${parsed.time} ${parsed.name} 様`, centerX, 610);
 
-  // 境界線
-  ctx.strokeStyle = '#CCCCCC';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(width / 2 - 300, height / 2 + 30);
-  ctx.lineTo(width / 2 + 300, height / 2 + 30);
-  ctx.stroke();
-
-  // 来客名
-  ctx.fillStyle = '#111111';
-  ctx.font = '900 96px NotoSansJP-Black';
-  ctx.textAlign = 'center';
-  ctx.fillText(data.name, width / 2, height / 2 + 180);
+  if (parsed.extraText) {
+    ctx.fillStyle = '#555555';
+    ctx.font = '50px "NotoSans"';
+    ctx.fillText(parsed.extraText, centerX, 750);
+  }
 
   return canvas.toBuffer('image/jpeg');
 }
 
 module.exports = {
   parseVisitorMessage,
-  generateWelcomeImage,
+  generateWelcomeImage
 };
