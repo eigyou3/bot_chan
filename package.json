@@ -7,6 +7,8 @@
   },
   "dependencies": {
     "discord.js": "^14.14.1",
-    "@napi-rs/canvas": "^0.1.44"
+    "@napi-rs/canvas": "^0.1.44",
+    "@discordjs/voice": "^0.16.1",
+    "prism-media": "^1.3.5"
   }
 }
