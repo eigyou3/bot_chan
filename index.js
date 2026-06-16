@@ -66,5 +66,12 @@ http.createServer((req, res) => {
   console.log(`サーバー起動：ポート ${PORT}`);
 });
 
+// 💡 ボイス接続バグ回避用のパッチ（追加部分）
+client.on('raw', (packet) => {
+  if (packet.t === 'VOICE_STATE_UPDATE' || packet.t === 'VOICE_SERVER_UPDATE') {
+    client.guilds.cache.get(packet.d.guild_id)?.shard.send(packet);
+  }
+});
+
 // Discordへのログイン
 client.login(process.env.DISCORD_TOKEN);
