@@ -66,16 +66,5 @@ http.createServer((req, res) => {
   console.log(`サーバー起動：ポート ${PORT}`);
 });
 
-// Discord.js v14専用のボイス接続バグ回避パッチ
-client.on('raw', (packet) => {
-  if (packet.t === 'VOICE_STATE_UPDATE') {
-    if (packet.d.user_id === client.user.id) return;
-    client.guilds.cache.get(packet.d.guild_id)?.shard.send(packet);
-  }
-  if (packet.t === 'VOICE_SERVER_UPDATE') {
-    client.guilds.cache.get(packet.d.guild_id)?.shard.send(packet);
-  }
-});
-
 // Discordへのログイン
 client.login(process.env.DISCORD_TOKEN);
