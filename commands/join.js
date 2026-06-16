@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const { joinVoiceChannel, getVoiceConnection } = require('@discordjs/voice');
+const { joinVoiceChannel, getVoiceConnection, createAudioPlayer, createAudioResource } = require('@discordjs/voice');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -10,30 +10,31 @@ module.exports = {
     const member = interaction.member;
     const guildId = interaction.guild.id;
 
-    // 1. コマンドを打った人がVCにいるかチェック
     if (!member.voice.channel) {
       return interaction.reply({ content: '❌ 先にボイスチャンネルに入室してください。', ephemeral: true });
     }
 
-    // 2. すでにBotがVCに参加しているかチェック
     const existingConnection = getVoiceConnection(guildId);
     if (existingConnection) {
       return interaction.reply({ content: '❌️すでに参加しています。', ephemeral: true });
     }
 
-    // 3. 誰もいないVC（自分以外に人間がいない）に接続しようとしたかチェック
     const voiceChannel = member.voice.channel;
     const humanMembers = voiceChannel.members.filter(m => !m.user.bot);
     if (humanMembers.size === 0) {
       return interaction.reply({ content: '❌️誰もいないVCには参加できません', ephemeral: true });
     }
 
-    // 接続処理
-    joinVoiceChannel({
+    // 1. ボイスチャンネルに接続
+    const connection = joinVoiceChannel({
       channelId: voiceChannel.id,
       guildId: guildId,
       adapterCreator: interaction.guild.voiceAdapterCreator,
     });
+
+    // 💡 【超重要】接続直後に空のプレイヤーをバインドして、Discord側のヘッドホン斜線を強制解除する
+    const dummyPlayer = createAudioPlayer();
+    connection.subscribe(dummyPlayer);
 
     // 読み上げ対象のテキストチャンネルIDを記憶
     if (!client.ttsChannels) client.ttsChannels = new Map();
