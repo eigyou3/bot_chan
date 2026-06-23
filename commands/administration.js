@@ -1,7 +1,6 @@
 const { 
   SlashCommandBuilder, 
   EmbedBuilder, 
-  ChannelType, 
   ActionRowBuilder, 
   ButtonBuilder, 
   ButtonStyle, 
@@ -22,28 +21,6 @@ function saveConfig(data) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2));
 }
 
-function parseTimeToMs(timeStr) {
-  if (!timeStr) return null;
-  const match = timeStr.trim().match(/^([0-2]?\d):([0-5]\d)$/);
-  if (!match) return null;
-
-  const hours = parseInt(match[1], 10);
-  const minutes = parseInt(match[2], 10);
-
-  const now = new Date();
-  const jstNow = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
-  
-  const target = new Date(jstNow);
-  target.setHours(hours, minutes, 0, 0);
-
-  if (target.getTime() <= jstNow.getTime()) {
-    target.setDate(target.getDate() + 1);
-  }
-
-  const diffMs = target.getTime() - jstNow.getTime();
-  return Date.now() + diffMs;
-}
-
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('admin')
@@ -56,8 +33,8 @@ module.exports = {
     )
     .addSubcommand(sub =>
       sub.setName('alarm')
-        .setDescription('日本時刻でアラームを設定（複数指定はスペース区切り）')
-        .addStringOption(o => o.setName('times').setDescription('時刻（例: 15:30 21:00 23:00）').setRequired(true))
+        .setDescription('毎日繰り返すアラームを設定（複数指定はスペース区切り）')
+        .addStringOption(o => o.setName('times').setDescription('時刻（例: 15:30 21:00）').setRequired(true))
         .addStringOption(o => o.setName('message').setDescription('通知メッセージ').setRequired(true))
     )
     .addSubcommand(sub =>
@@ -105,40 +82,42 @@ module.exports = {
       if (!config.alarms) config.alarms = [];
 
       for (const timeStr of timeInputs) {
-        const targetTime = parseTimeToMs(timeStr);
-        if (!targetTime) continue;
+        // 時刻形式（HH:MM）の簡易チェック
+        const match = timeStr.trim().match(/^([0-2]?\d):([0-5]\d)$/);
+        if (!match) continue;
 
-        const alarmData = { time: targetTime, channelId: interaction.channelId, message };
-        config.alarms.push(alarmData);
-        registeredTimes.push(timeStr);
+        // 時と分を綺麗にフォーマット（例: 5:3 -> 05:03）
+        const hours = parseInt(match[1], 10).toString().padStart(2, '0');
+        const minutes = parseInt(match[2], 10).toString().padStart(2, '0');
+        const formattedTime = `${hours}:${minutes}`;
 
-        const delay = targetTime - Date.now();
-
-        setTimeout(async () => {
-          const channel = await client.channels.fetch(interaction.channelId).catch(() => null);
-          if (channel) await channel.send(message);
-
-          const currentConfig = loadConfig();
-          currentConfig.alarms = (currentConfig.alarms || []).filter(a => a.time !== targetTime);
-          saveConfig(currentConfig);
-        }, delay);
+        // 重複登録を避ける
+        const exists = config.alarms.some(a => a.time === formattedTime && a.channelId === interaction.channelId && a.message === message);
+        if (!exists) {
+          config.alarms.push({
+            time: formattedTime,
+            channelId: interaction.channelId,
+            message: message
+          });
+        }
+        registeredTimes.push(formattedTime);
       }
 
       if (registeredTimes.length === 0) {
-        return interaction.reply({ content: '❌ 時刻の形式が正しくありません。「15:30」や「21:00 23:45」のように入力してください。', ephemeral: true });
+        return interaction.reply({ content: '❌ 時刻の形式が正しくありません。「15:30」や「21:00」のように入力してください。', ephemeral: true });
       }
 
+      saveConfig(config);
+
       return interaction.reply({ 
-        content: `⏰ 以下の時刻にアラームを設定しました。\n設定時刻: ${registeredTimes.map(t => `**${t}**`).join(', ')}`, 
+        content: `⏰ 以下の時刻に毎日繰り返すアラームを設定しました。\n設定時刻: ${registeredTimes.map(t => `**${t}**`).join(', ')}`, 
         ephemeral: true 
       });
     }
 
     if (subcommand === 'setvc') {
       if (!client.vcNotifyMap) client.vcNotifyMap = new Map();
-
       client.vcNotifyMap.set(interaction.guildId, interaction.channelId);
-
       return interaction.reply({ content: `✅ VC参加の通知先をこのサーバーのこのチャンネル（ <#${interaction.channelId}> ）に設定しました。`, ephemeral: true });
     }
   },
