@@ -2,19 +2,10 @@ const { REST, Routes } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
-// チャンネル設定やアラームデータの保存先
 const CONFIG_PATH = path.join(__dirname, '..', 'config.json');
 
 function loadConfig() {
-  try {
-    return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-  } catch {
-    return {};
-  }
-}
-
-function saveConfig(data) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2));
+  try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch { return {}; }
 }
 
 module.exports = {
@@ -42,10 +33,8 @@ module.exports = {
       console.error('スラッシュコマンドの登録中にエラーが発生しました:', error);
     }
 
-    // --- 常駐アナウンスとアラームのデータ復元処理 ---
+    // --- 常駐アナウンスのデータ復元処理 ---
     const config = loadConfig();
-
-    // 常駐アナウンスの復元
     if (config.sticky) {
       client.stickyMap = new Map();
       for (const [channelId, data] of Object.entries(config.sticky)) {
@@ -53,38 +42,43 @@ module.exports = {
       }
     }
 
-    // アラーム（タイマー）の復元
-    if (config.alarms) {
-      const now = Date.now();
-      const activeAlarms = [];
+    // --- 【新機能】毎日繰り返すアラームの常駐監視システム（1分ごとチェック） ---
+    let lastTriggeredMinute = ''; // 同じ1分間に何度も鳴るのを防ぐフラグ
 
-      for (const alarm of config.alarms) {
-        if (alarm.time > now) {
-          // 残り時間を計算してタイマーを再セット
-          const delay = alarm.time - now;
-          setTimeout(async () => {
-            try {
-              const channel = await client.channels.fetch(alarm.channelId);
-              if (channel) {
-                await channel.send(alarm.message);
-              }
-            } catch (err) {
-              console.error('アラーム送信エラー:', err);
-            } finally {
-              // 送信が終わったら保存データから削除
-              const currentConfig = loadConfig();
-              currentConfig.alarms = (currentConfig.alarms || []).filter(a => a.time !== alarm.time);
-              saveConfig(currentConfig);
+    setInterval(async () => {
+      // 日本時刻の「HH:MM」を取得
+      const jstStr = new Date().toLocaleString("en-US", { timeZone: "Asia/Tokyo" });
+      const jstDate = new Date(jstStr);
+      const hours = jstDate.getHours().toString().padStart(2, '0');
+      const minutes = jstDate.getMinutes().toString().padStart(2, '0');
+      const currentTimeStr = `${hours}:${minutes}`; // 例: "15:30"
+
+      // 既にこの分でアラームを処理済みの場合はスキップ
+      if (lastTriggeredMinute === currentTimeStr) return;
+
+      const currentConfig = loadConfig();
+      if (!currentConfig.alarms || currentConfig.alarms.length === 0) return;
+
+      let triggered = false;
+
+      for (const alarm of currentConfig.alarms) {
+        if (alarm.time === currentTimeStr) {
+          triggered = true;
+          try {
+            const channel = await client.channels.fetch(alarm.channelId).catch(() => null);
+            if (channel) {
+              await channel.send(alarm.message);
             }
-          }, delay);
-
-          activeAlarms.push(alarm);
+          } catch (err) {
+            console.error('アラーム定期送信エラー:', err);
+          }
         }
       }
 
-      // すでに過ぎてしまった古いアラームを掃除して保存
-      config.alarms = activeAlarms;
-      saveConfig(config);
-    }
+      // 鳴らした時間帯を記録して、同じ1分間の重複を防ぐ
+      if (triggered) {
+        lastTriggeredMinute = currentTimeStr;
+      }
+    }, 60000); // 60秒（1分）ごとにチェック
   },
 };
