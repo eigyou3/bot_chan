@@ -95,8 +95,9 @@ async function generateWelcomeImage(data, width = 1920, height = 1080) {
   ctx.fillStyle = '#222222';
 
   const guests = data.guests || [];
+  const offset = guests.length === 1 ? lineGap : 0;
   guests.forEach((g, i) => {
-    const y = lineStartY + i * lineGap;
+    const y = lineStartY + offset + i * lineGap;
     const timeStr = toFullWidthTime(g.time);
     const line = `${timeStr}　　${g.name}`;
     ctx.font = `300 ${Math.round(height * 0.055)}px "${THIN}"`;
