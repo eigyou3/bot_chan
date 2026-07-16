@@ -1,12 +1,17 @@
 {
-  "name": "bot-chan",
+  "name": "integrated-discord-bot",
   "version": "1.0.0",
+  "description": "統合Discord Bot",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.14.1",
-    "@napi-rs/canvas": "^0.1.44"
+    "@fontsource/noto-sans-jp": "^5.2.9",
+    "@napi-rs/canvas": "^0.1.99",
+    "discord.js": "^14.15.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
