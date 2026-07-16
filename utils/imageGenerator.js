@@ -97,6 +97,7 @@ async function generateWelcomeImage(data, width = 1920, height = 1080) {
     ctx.drawImage(logo, logoX, logoY, logoW, logoH);
   } catch (e) {
     console.warn('welcome-logo.png 読み込みスキップ:', e.message);
+    console.warn('試したパス:', require('path').join(__dirname, '..', 'assets', 'welcome-logo.png'));
   }
 
   // ゲスト情報（最大3行）
