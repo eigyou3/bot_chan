@@ -86,7 +86,7 @@ async function generateWelcomeImage(data, width = 1920, height = 1080) {
 
   // Welcomeロゴ画像（assets/welcome-logo.png）
   try {
-    const logo = await loadImage(path.join(__dirname, 'assets', 'welcome-logo.png'));
+    const logo = await loadImage(path.join(__dirname, '..', 'assets', 'welcome-logo.png'));
     // 元サイズ 2955x772 → 横幅を画面の60%に収める
     const logoW = Math.round(width * 0.60);
     const logoH = Math.round(logoW * (772 / 2955));
