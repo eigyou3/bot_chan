@@ -1,5 +1,15 @@
-const { createCanvas, loadImage } = require('@napi-rs/canvas');
+const { createCanvas, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
+
+try {
+  GlobalFonts.registerFromPath(
+    path.join(__dirname, '..', 'node_modules', '@fontsource', 'dancing-script', 'files', 'dancing-script-latin-700-normal.woff'),
+    'DancingScript'
+  );
+  console.log('DancingScript フォント読み込み成功');
+} catch(e) {
+  console.warn('DancingScript フォント読み込み失敗:', e.message);
+}
 
 // ==============================
 // カスタマイズ設定
@@ -84,28 +94,18 @@ async function generateWelcomeImage(data, width = 1920, height = 1080) {
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, width, height);
 
-  // Welcomeロゴ画像（assets/welcome-logo.png）
-  try {
-    const logo = await loadImage(path.join(__dirname, '..', 'assets', 'welcome-logo.png'));
-    // 元サイズ 2955x772 → 横幅を画面の60%に収める
-    console.log('logo size:', logo.width, logo.height);
-    const logoW = Math.round(width * 0.75);
-    const logoH = Math.round(logoW * (772 / 2955));
-    const logoX = cx - logoW / 2;
-    const logoY = Math.round(height * 0.08); // 上から8%
-    console.log('drawing logo at:', logoX, logoY, logoW, logoH);
-    ctx.drawImage(logo, logoX, logoY, logoW, logoH);
-  } catch (e) {
-    console.warn('welcome-logo.png 読み込みスキップ:', e.message);
-    console.warn('試したパス:', require('path').join(__dirname, '..', 'assets', 'welcome-logo.png'));
-  }
 
   // ゲスト情報（最大3行）
   // 1行目のY座標: 上から約46%
   const lineStartY = Math.round(height * 0.46);
   const lineGap    = Math.round(height * 0.10); // 行間（ゆったり）
 
+  // Welcome文字
   ctx.textAlign = 'center';
+  ctx.fillStyle = '#1a1a1a';
+  ctx.font = '700 '+ Math.round(height * 0.18) +'px DancingScript';
+  ctx.fillText('Welcome', cx, Math.round(height * 0.35));
+
   ctx.fillStyle = '#222222';
 
   const guests = data.guests || [];
