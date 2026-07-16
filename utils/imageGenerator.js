@@ -1,27 +1,16 @@
-const { createCanvas, GlobalFonts } = require('@napi-rs/canvas');
+const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
 const path = require('path');
-
-try {
-  GlobalFonts.registerFromPath(
-    path.join(__dirname, '..', 'node_modules', '@fontsource', 'dancing-script', 'files', 'dancing-script-latin-700-normal.woff'),
-    'DancingScript'
-  );
-  console.log('DancingScript フォント読み込み成功');
-} catch(e) {
-  console.warn('DancingScript フォント読み込み失敗:', e.message);
-}
 
 // ==============================
 // カスタマイズ設定
 // ==============================
 const COMPANY_NAME = '－ Komai home －';
 const WELCOME_MESSAGE = 'ご来社いただきありがとうございます。\n本日はどうぞよろしくお願いいたします。';
-// 下部テキストを表示するか
 const SHOW_MESSAGE = true;
 const SHOW_FOOTER = true;
 
 // ==============================
-// 全角変換ユーティリティ
+// 全角変換
 // ==============================
 function toFullWidth(str) {
   return str
@@ -30,13 +19,11 @@ function toFullWidth(str) {
 }
 
 function toFullWidthTime(time) {
-  // "16:30" → "１６：３０"
   return toFullWidth(time);
 }
 
 // ==============================
 // メッセージパース（複数行対応）
-// 書式: 各行が「時間 名前」
 // ==============================
 function parseVisitorMessage(content) {
   const normalized = content
@@ -56,24 +43,21 @@ function parseVisitorMessage(content) {
     const timeStr = tokens[0];
     let nameStr = tokens.slice(1).join('　');
 
-    // 時間パース
     const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
     if (!timeMatch) continue;
 
     const hour = timeMatch[1].padStart(2, '0');
     const min  = timeMatch[2].padStart(2, '0');
 
-    // 様がなければ付与
-    if (!nameStr.endsWith('様') && !nameStr.endsWith('さん')) nameStr += '　様';
-    else if (nameStr.endsWith('さん')) nameStr = nameStr.replace(/さん$/, '　様');
-    else if (nameStr.endsWith('様') && !nameStr.endsWith('　様')) {
+    if (!nameStr.endsWith('様') && !nameStr.endsWith('さん')) {
+      nameStr += '　様';
+    } else if (nameStr.endsWith('さん')) {
+      nameStr = nameStr.replace(/さん$/, '　様');
+    } else if (nameStr.endsWith('様') && !nameStr.endsWith('　様')) {
       nameStr = nameStr.replace(/様$/, '　様');
     }
 
-    guests.push({
-      time: `${hour}:${min}`,
-      name: nameStr,
-    });
+    guests.push({ time: `${hour}:${min}`, name: nameStr });
   }
 
   if (guests.length === 0) return null;
@@ -94,24 +78,25 @@ async function generateWelcomeImage(data, width = 1920, height = 1080) {
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, width, height);
 
+  // Welcomeロゴ画像
+  const logoPath = path.join(__dirname, '..', 'assets', 'welcome-logo.png');
+  const logo = await loadImage(logoPath);
+  const logoW = Math.round(width * 0.75);
+  const logoH = Math.round(logoW * (logo.height / logo.width));
+  const logoX = cx - logoW / 2;
+  const logoY = Math.round(height * 0.08);
+  ctx.drawImage(logo, logoX, logoY, logoW, logoH);
 
   // ゲスト情報（最大3行）
-  // 1行目のY座標: 上から約46%
-  const lineStartY = Math.round(height * 0.46);
-  const lineGap    = Math.round(height * 0.10); // 行間（ゆったり）
+  const lineStartY = Math.round(height * 0.50);
+  const lineGap    = Math.round(height * 0.10);
 
-  // Welcome文字
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#1a1a1a';
-  ctx.font = '700 '+ Math.round(height * 0.18) +'px DancingScript';
-  ctx.fillText('Welcome', cx, Math.round(height * 0.35));
-
   ctx.fillStyle = '#222222';
 
   const guests = data.guests || [];
   guests.forEach((g, i) => {
     const y = lineStartY + i * lineGap;
-    // 全角変換
     const timeStr = toFullWidthTime(g.time);
     const line = `${timeStr}　　${g.name}`;
     ctx.font = `300 ${Math.round(height * 0.055)}px "${THIN}"`;
@@ -120,10 +105,10 @@ async function generateWelcomeImage(data, width = 1920, height = 1080) {
 
   // 下部メッセージ
   if (SHOW_MESSAGE && WELCOME_MESSAGE) {
-    const msgY = Math.round(height * 0.78);
+    const msgY = Math.round(height * 0.80);
     const msgLineH = Math.round(height * 0.045);
     ctx.fillStyle = '#555555';
-    ctx.font = `300 ${Math.round(height * 0.032)}px "${THIN}"`;
+    ctx.font = `300 ${Math.round(height * 0.030)}px "${THIN}"`;
     WELCOME_MESSAGE.split('\n').forEach((line, i) => {
       ctx.fillText(line, cx, msgY + i * msgLineH);
     });
@@ -132,8 +117,8 @@ async function generateWelcomeImage(data, width = 1920, height = 1080) {
   // フッター
   if (SHOW_FOOTER && COMPANY_NAME) {
     ctx.fillStyle = '#888888';
-    ctx.font = `300 ${Math.round(height * 0.026)}px "${THIN}"`;
-    ctx.fillText(COMPANY_NAME, cx, Math.round(height * 0.92));
+    ctx.font = `300 ${Math.round(height * 0.024)}px "${THIN}"`;
+    ctx.fillText(COMPANY_NAME, cx, Math.round(height * 0.93));
   }
 
   return canvas.toBuffer('image/jpeg', { quality: 0.95 });
