@@ -88,10 +88,10 @@ async function generateWelcomeImage(data, width = 1920, height = 1080) {
   try {
     const logo = await loadImage(path.join(__dirname, '..', 'assets', 'welcome-logo.png'));
     // 元サイズ 2955x772 → 横幅を画面の60%に収める
-    const logoW = Math.round(width * 0.60);
+    const logoW = Math.round(width * 0.75);
     const logoH = Math.round(logoW * (772 / 2955));
     const logoX = cx - logoW / 2;
-    const logoY = Math.round(height * 0.10); // 上から10%
+    const logoY = Math.round(height * 0.08); // 上から8%
     ctx.drawImage(logo, logoX, logoY, logoW, logoH);
   } catch (e) {
     console.warn('welcome-logo.png 読み込みスキップ:', e.message);
