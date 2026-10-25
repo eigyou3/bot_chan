@@ -1,25 +1,16 @@
-const { 
-  SlashCommandBuilder, 
-  EmbedBuilder, 
-  ActionRowBuilder, 
-  ButtonBuilder, 
-  ButtonStyle, 
-  ModalBuilder, 
-  TextInputBuilder, 
-  TextInputStyle 
+const {
+  SlashCommandBuilder,
+  ActionRowBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle
 } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
+const st = require('../utils/store');
 
-const CONFIG_PATH = path.join(__dirname, '..', 'config.json');
 const ALLOWED_USERS = ['1088369918069715024', '936419559165026304'];
 
-function loadConfig() {
-  try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch { return {}; }
-}
-function saveConfig(data) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2));
-}
+// bot-config無い時の注意書き
+const warn = g => st.findCh(g) ? '' : `\n⚠️ #${st.CH_NAME} が無いので再起動すると消えます`;
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -47,78 +38,58 @@ module.exports = {
       return interaction.reply({ content: 'このコマンドを実行する権限がありません。', ephemeral: true });
     }
 
-    const subcommand = interaction.options.getSubcommand();
-    const config = loadConfig();
+    const sub = interaction.options.getSubcommand();
+    const g = interaction.guild;
+    const d = st.get(g.id);
 
-    if (subcommand === 'announce') {
+    if (sub === 'announce') {
       const role = interaction.options.getRole('role');
-      const isSticky = interaction.options.getBoolean('sticky') || false;
-      
-      const roleIdParam = role ? role.id : 'none';
-      const stickyParam = isSticky ? '1' : '0';
+      const sticky = interaction.options.getBoolean('sticky') || false;
 
       const modal = new ModalBuilder()
-        .setCustomId(`ann_mdl_${roleIdParam}_${stickyParam}`)
+        .setCustomId(`ann_mdl_${role ? role.id : 'none'}_${sticky ? '1' : '0'}`)
         .setTitle('アナウンス内容の入力');
 
-      const textInput = new TextInputBuilder()
+      const txt = new TextInputBuilder()
         .setCustomId('announce_text')
         .setLabel('案内文章（ここで普通に改行できます）')
         .setStyle(TextInputStyle.Paragraph)
         .setRequired(true);
 
-      modal.addComponents(new ActionRowBuilder().addComponents(textInput));
-
-      return await interaction.showModal(modal);
+      modal.addComponents(new ActionRowBuilder().addComponents(txt));
+      return interaction.showModal(modal);
     }
 
-    if (subcommand === 'alarm') {
-      const timesInput = interaction.options.getString('times');
-      const message = interaction.options.getString('message');
-      
-      const timeInputs = timesInput.split(/[\s ]+/).filter(Boolean);
-      const registeredTimes = [];
+    if (sub === 'alarm') {
+      const msg = interaction.options.getString('message');
+      const ins = interaction.options.getString('times').split(/[\s　]+/).filter(Boolean);
+      const ok = [];
 
-      if (!config.alarms) config.alarms = [];
-
-      for (const timeStr of timeInputs) {
-        // 時刻形式（HH:MM）の簡易チェック
-        const match = timeStr.trim().match(/^([0-2]?\d):([0-5]\d)$/);
-        if (!match) continue;
-
-        // 時と分を綺麗にフォーマット（例: 5:3 -> 05:03）
-        const hours = parseInt(match[1], 10).toString().padStart(2, '0');
-        const minutes = parseInt(match[2], 10).toString().padStart(2, '0');
-        const formattedTime = `${hours}:${minutes}`;
-
-        // 重複登録を避ける
-        const exists = config.alarms.some(a => a.time === formattedTime && a.channelId === interaction.channelId && a.message === message);
-        if (!exists) {
-          config.alarms.push({
-            time: formattedTime,
-            channelId: interaction.channelId,
-            message: message
-          });
+      for (const s of ins) {
+        const m = s.trim().match(/^([0-2]?\d):([0-5]\d)$/);
+        if (!m) continue;
+        // 5:3 -> 05:03
+        const t = `${m[1].padStart(2, '0')}:${m[2].padStart(2, '0')}`;
+        if (!d.alarms.some(a => a.time === t && a.ch === interaction.channelId && a.msg === msg)) {
+          d.alarms.push({ time: t, ch: interaction.channelId, msg });
         }
-        registeredTimes.push(formattedTime);
+        ok.push(t);
       }
 
-      if (registeredTimes.length === 0) {
+      if (!ok.length) {
         return interaction.reply({ content: '❌ 時刻の形式が正しくありません。「15:30」や「21:00」のように入力してください。', ephemeral: true });
       }
 
-      saveConfig(config);
-
-      return interaction.reply({ 
-        content: `⏰ 以下の時刻に毎日繰り返すアラームを設定しました。\n設定時刻: ${registeredTimes.map(t => `**${t}**`).join(', ')}`, 
-        ephemeral: true 
-      });
+      await interaction.deferReply({ ephemeral: true });
+      await st.save(g);
+      return interaction.editReply(`⏰ 以下の時刻に毎日繰り返すアラームを設定しました。\n設定時刻: ${ok.map(t => `**${t}**`).join(', ')}${warn(g)}`);
     }
 
-    if (subcommand === 'setvc') {
-      if (!client.vcNotifyMap) client.vcNotifyMap = new Map();
-      client.vcNotifyMap.set(interaction.guildId, interaction.channelId);
-      return interaction.reply({ content: `✅ VC参加の通知先をこのサーバーのこのチャンネル（ <#${interaction.channelId}> ）に設定しました。`, ephemeral: true });
+    if (sub === 'setvc') {
+      d.vc = interaction.channelId;
+      await interaction.deferReply({ ephemeral: true });
+      await st.save(g);
+      return interaction.editReply(`✅ VC参加の通知先をこのチャンネル（ <#${interaction.channelId}> ）に設定しました。${warn(g)}`);
     }
   },
 };

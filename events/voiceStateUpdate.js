@@ -1,4 +1,5 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const st = require('../utils/store');
 
 module.exports = {
   name: 'voiceStateUpdate',
@@ -9,9 +10,7 @@ module.exports = {
     const vcChannel = newState.channel;
     if (!vcChannel || vcChannel.members.size !== 1) return;
 
-    if (!client.vcNotifyMap) client.vcNotifyMap = new Map();
-    
-    const notifyChannelId = client.vcNotifyMap.get(newState.guild.id);
+    const notifyChannelId = st.get(newState.guild.id).vc;
     if (!notifyChannelId) return;
 
     const notifyChannel = newState.guild.channels.cache.get(notifyChannelId);
@@ -36,6 +35,6 @@ module.exports = {
         .setURL(`https://discord.com/channels/${newState.guild.id}/${newState.channelId}`)
     );
 
-    await notifyChannel.send({ embeds: [embed], components: [vcRow] });
+    await notifyChannel.send({ embeds: [embed], components: [vcRow] }).catch(e => console.error('VC通知失敗:', e.message));
   },
 };

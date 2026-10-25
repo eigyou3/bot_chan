@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
+const st = require('../utils/store');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -76,11 +77,8 @@ module.exports = {
       components: [row]
     });
 
-    if (!client.entryStorage) client.entryStorage = new Map();
-    if (!client.entryChannelMap) client.entryChannelMap = new Map();
-
-    // 💡 チャンネルIDをキーにして、生成したメッセージのデータを登録（常駐処理用）
-    client.entryStorage.set(channel.id, data);
-    client.entryChannelMap.set(channel.id, response.id);
+    // チャンネルごとに募集データ保存
+    st.get(interaction.guildId).entry[channel.id] = { ...data, msg: response.id };
+    await st.save(interaction.guild);
   },
 };

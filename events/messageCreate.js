@@ -1,5 +1,5 @@
-const path = require('path');
-const { EmbedBuilder, AttachmentBuilder } = require('discord.js');
+const { EmbedBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const st = require('../utils/store');
 
 const NOTIFY_ROLE_ID = '1496147336043298866';
 
@@ -46,37 +46,33 @@ module.exports = {
     }
 
     // --- 2. アナウンスの常駐処理 ---
-    if (!client.stickyMap) client.stickyMap = new Map();
-    const stickyData = client.stickyMap.get(message.channelId);
+    if (!message.guild) return;
+    const sk = st.get(message.guildId).sticky[message.channelId];
+    if (!sk) return;
 
-    if (stickyData) {
-      try {
-        const oldMessage = await message.channel.messages.fetch(stickyData.messageId).catch(() => null);
-        if (oldMessage) {
-          await oldMessage.delete().catch(() => null);
-          const newMessage = await message.channel.send({ embeds: oldMessage.embeds, components: oldMessage.components });
-          client.stickyMap.set(message.channelId, { messageId: newMessage.id, text: stickyData.text });
+    try {
+      const old = await message.channel.messages.fetch(sk.messageId).catch(() => null);
+      if (old) await old.delete().catch(() => null);
+
+      // 元メッセージが見つからない時(再起動直後とか)はtextから作り直す
+      let emb = old?.embeds;
+      let cmp = old?.components;
+      if (!old) {
+        emb = [new EmbedBuilder().setColor('#5865F2').setDescription(sk.text)];
+        cmp = [];
+        if (sk.roleId && sk.roleId !== 'none') {
+          cmp.push(new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`ann_btn_add_${sk.roleId}`).setLabel('ロールを受け取る').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`ann_btn_remove_${sk.roleId}`).setLabel('ロールを解除する').setStyle(ButtonStyle.Danger)
+          ));
         }
-      } catch (error) {
-        console.error(error);
       }
-    }
 
-    // --- 3. チームマッチングのアナウンス常駐処理 ---
-    if (!client.channelMap) client.channelMap = new Map();
-    const activeMessageId = client.channelMap.get(message.channelId);
-
-    if (activeMessageId) {
-      try {
-        const oldMessage = await message.channel.messages.fetch(activeMessageId).catch(() => null);
-        if (oldMessage) {
-          await oldMessage.delete().catch(() => null);
-          const newMessage = await message.channel.send({ embeds: oldMessage.embeds, components: oldMessage.components });
-          client.channelMap.set(message.channelId, newMessage.id);
-        }
-      } catch (error) {
-        console.error(error);
-      }
+      const nw = await message.channel.send({ embeds: emb, components: cmp });
+      sk.messageId = nw.id;
+      st.saveLater(message.guild);
+    } catch (e) {
+      console.error(e);
     }
   },
 };

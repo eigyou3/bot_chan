@@ -1,15 +1,5 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const fs = require('fs');
-const path = require('path');
-
-const CONFIG_PATH = path.join(__dirname, '..', 'config.json');
-
-function loadConfig() {
-  try { return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch { return {}; }
-}
-function saveConfig(data) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(data, null, 2));
-}
+const st = require('../utils/store');
 
 module.exports = {
   name: 'interactionCreate',
@@ -38,10 +28,7 @@ module.exports = {
       }
 
       if (interaction.customId === 'entry_join' || interaction.customId === 'entry_leave') {
-        if (!client.entryStorage) client.entryStorage = new Map();
-        if (!client.entryChannelMap) client.entryChannelMap = new Map();
-
-        const data = client.entryStorage.get(interaction.channelId);
+        const data = st.get(interaction.guildId).entry[interaction.channelId];
         if (!data) return interaction.reply({ content: '募集データが見つかりません。', ephemeral: true });
 
         const userId = interaction.user.id;
@@ -78,9 +65,9 @@ module.exports = {
         }
 
         await interaction.reply({ content: replyContent, ephemeral: true });
+        st.saveLater(interaction.guild, 5000);
 
-        const activeMessageId = client.entryChannelMap.get(interaction.channelId);
-        const targetMsg = await interaction.channel.messages.fetch(activeMessageId).catch(() => null);
+        const targetMsg = await interaction.channel.messages.fetch(data.msg).catch(() => null);
         if (targetMsg) {
           await targetMsg.edit({ embeds: [embed] });
         }
@@ -108,12 +95,8 @@ module.exports = {
         const msg = await interaction.channel.send({ embeds: [embed], components: row.components.length > 0 ? [row] : [] });
 
         if (isSticky) {
-          const config = loadConfig();
-          if (!config.sticky) config.sticky = {};
-          config.sticky[interaction.channelId] = { messageId: msg.id, text };
-          saveConfig(config);
-          if (!client.stickyMap) client.stickyMap = new Map();
-          client.stickyMap.set(interaction.channelId, { messageId: msg.id, text });
+          st.get(interaction.guildId).sticky[interaction.channelId] = { messageId: msg.id, text, roleId };
+          await st.save(interaction.guild);
         }
       }
     }
