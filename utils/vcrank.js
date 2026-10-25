@@ -39,6 +39,9 @@ function vd(gid) {
   return d.vcr;
 }
 
+// setvc済み＆OFFにしてない時だけ動く
+const on = gid => !!st.get(gid).vc && !st.get(gid).rkOff;
+
 const humans = ch => ch.members.filter(m => !m.user.bot);
 const add = (o, k, v = 1) => { o[k] = (o[k] || 0) + v; };
 
@@ -105,7 +108,7 @@ async function onVoice(o, n) {
   const g = n.guild;
   if (n.member?.user.bot) return;
   if (o.channelId === n.channelId) return;
-  if (!st.get(g.id).vc) return;
+  if (!on(g.id)) return;
   await rollover(g);
   accrue(g);
   const end = o.channelId ? sync(g, o.channelId, n.member.id) : false;
@@ -226,7 +229,7 @@ async function rollover(g) {
 // 起動時：保存してたセッションと今のVCを突き合わせ
 async function init(client) {
   for (const g of client.guilds.cache.values()) {
-    if (!st.get(g.id).vc) continue;
+    if (!on(g.id)) continue;
     const r = vd(g.id);
     r.ts = Date.now();  // 落ちてた間は数えない
     for (const cid of Object.keys(r.sess)) {
@@ -244,7 +247,7 @@ async function init(client) {
 // 毎分：時間の足し込みと週替わりチェック
 async function tick(client) {
   for (const g of client.guilds.cache.values()) {
-    if (!st.get(g.id).vc) continue;
+    if (!on(g.id)) continue;
     await rollover(g);
     const r = vd(g.id);
     if (!Object.keys(r.sess).length) continue;
@@ -258,4 +261,29 @@ async function tick(client) {
   }
 }
 
-module.exports = { onVoice, init, tick, humans };
+// OFFにする時：途中経過は消して、通話中のセッションは捨てる（集計は残す）
+async function stop(g) {
+  const d = st.get(g.id);
+  const r = d.vcr;
+  if (!r) return;
+  const ch = d.vc && g.channels.cache.get(d.vc);
+  if (ch && r.msg) await ch.messages.delete(r.msg).catch(() => null);
+  r.msg = null;
+  r.sess = {};
+}
+
+// ONに戻す時：今VCにいる人から数え直し
+async function start(g) {
+  const r = vd(g.id);
+  // OFF中に週が変わってたら、古い週は確定させずに捨てる
+  if (r.cur.wk !== weekStart()) r.cur = blankWk(weekStart());
+  r.ts = Date.now();
+  r.sess = {};
+  g.channels.cache.filter(c => c.isVoiceBased() && c.id !== g.afkChannelId && humans(c).size).forEach(c => {
+    r.sess[c.id] = { starter: null, since: Date.now(), multi: humans(c).size >= 2, solo: null, soloT: 0 };
+    sync(g, c.id);
+  });
+  await rollover(g);
+}
+
+module.exports = { onVoice, init, tick, humans, stop, start };
