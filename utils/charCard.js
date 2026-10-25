@@ -27,6 +27,17 @@ const INK = '#2B2B2B', SUB = '#8A8A8A', LINE = '#EFEFEF';
 
 const font = (f, s) => `${s}px "${f}"`;
 
+// 立ち絵の上でも読めるよう白いふちを付けて書く
+function txt(ctx, s, x, y) {
+  ctx.save();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 10;
+  ctx.lineJoin = 'round';
+  ctx.strokeText(s, x, y);
+  ctx.restore();
+  ctx.fillText(s, x, y);
+}
+
 function rr(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
@@ -138,7 +149,7 @@ async function charCard(d) {
   ctx.textAlign = 'left';
   ctx.font = font('ZenMaruB', 40);
   ctx.fillStyle = INK;
-  ctx.fillText(`Lv.${d.lv}`, 58, 80);
+  txt(ctx, `Lv.${d.lv}`, 58, 80);
   const lw = ctx.measureText(`Lv.${d.lv}`).width;
   if (d.cons != null) {
     ctx.font = font('ZenMaruB', 30);
@@ -156,11 +167,11 @@ async function charCard(d) {
   ['A', 'E', 'Q'].forEach((k, i) => {
     ctx.font = font('ZenMaruB', 30);
     ctx.fillStyle = ac;
-    ctx.fillText(k, tx, 134);
+    txt(ctx, k, tx, 134);
     tx += ctx.measureText(k).width + 8;
     ctx.fillStyle = INK;
     const v = String(d.tal[i] ?? '-');
-    ctx.fillText(v, tx, 134);
+    txt(ctx, v, tx, 134);
     tx += ctx.measureText(v).width + 26;
   });
 
@@ -247,12 +258,6 @@ async function charCard(d) {
     ctx.fillStyle = '#FAFAFA';
     rr(ctx, x, y, TW, TH, 16);
     ctx.fill();
-    if (d.showOp && r.best) {
-      ctx.strokeStyle = ac;
-      ctx.lineWidth = 3;
-      rr(ctx, x, y, TW, TH, 16);
-      ctx.stroke();
-    }
     const im = ris[i];
 
     // OPなし＝画像だけ大きめに真ん中

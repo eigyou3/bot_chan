@@ -12,8 +12,17 @@ const cache = new Map();  // uid -> { at, ttl, p, av, raw }
 async function names() {
   if (nm && Date.now() - nmAt < 86400000) return nm;
   try {
-    const [c, l, pf] = await Promise.all(['characters.json', 'loc.json', 'pfps.json'].map(f => fetch(RAW + f).then(r => r.json())));
-    ja = l.ja || {};
+    // 古いstoreは新キャラ・新武器が抜けてるので gi/ と合わせる（セット名は古い方にしか無い）
+    const get = f => fetch(RAW + f).then(r => r.json()).catch(() => ({}));
+    const [c0, c1, l0, l1, pf] = await Promise.all(['characters.json', 'gi/avatars.json', 'loc.json', 'gi/locs.json', 'pfps.json'].map(get));
+    ja = { ...(l0.ja || {}), ...(l1.ja || {}) };
+    const c = { ...c0 };
+    const cut = s => (s || '').replace(/^\/ui\//, '').replace(/\.png$/, '');
+    for (const [id, v] of Object.entries(c1)) {
+      const cos = {};
+      for (const [k, x] of Object.entries(v.Costumes || {})) cos[k] = { icon: cut(x.Icon), art: cut(x.Art), sideIconName: cut(x.SideIcon) };
+      c[id] = { ...v, SideIconName: cut(v.SideIconName), Costumes: cos };
+    }
     const m = {};
     for (const [id, v] of Object.entries(c)) {
       const n = ja[String(v.NameTextMapHash)];
