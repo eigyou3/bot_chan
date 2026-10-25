@@ -45,10 +45,17 @@ async function write(g) {
   const ch = findCh(g);
   if (!ch) return false;
   const buf = Buffer.from(JSON.stringify(get(g.id), null, 2));
-  const m = await ch.send({ files: [new AttachmentBuilder(buf, { name: FILE })], flags: MessageFlags.SuppressNotifications });
-  const old = last.get(g.id);
+  const f = new AttachmentBuilder(buf, { name: FILE });
+
+  // 前のがあればファイルを差し替えて編集（新規投稿しない）
+  const old = last.get(g.id) && await ch.messages.fetch(last.get(g.id)).catch(() => null);
+  if (old) {
+    const ok = await old.edit({ files: [f], attachments: [] }).catch(() => null);
+    if (ok) return true;
+  }
+
+  const m = await ch.send({ files: [f], flags: MessageFlags.SuppressNotifications });
   last.set(g.id, m.id);
-  if (old) await ch.messages.delete(old).catch(() => null);
   return true;
 }
 
