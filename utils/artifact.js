@@ -52,6 +52,9 @@ const relics = a => (a.equipList || []).filter(e => e.reliquary && PARTS[e.flat?
   .sort((x, y) => ORDER.indexOf(x.flat.equipType) - ORDER.indexOf(y.flat.equipType));
 
 const COLOR = '#BA7517';
+const INTRO_CH = '1510962713612914698';
+// 誰が実行したか先頭に出す
+const who = i => `<@${i.user.id}> が \`/artifact\` を実行`;
 const box = t => new EmbedBuilder().setColor(COLOR).setDescription(t);
 // 本人だけのメニュー（中身もEmbed）
 const ask = (t, menu) => ({ embeds: [box(t)], components: [new ActionRowBuilder().addComponents(menu)] });
@@ -65,16 +68,16 @@ async function pub(i, t) {
 async function start(i) {
   const uid = st.get(i.guildId).intro?.[i.user.id]?.uid;
   // 他人の聖遺物は出さない＝登録済みのUIDだけ
-  if (!uid) return i.reply({ embeds: [box(`<@${i.user.id}> さん、UIDが登録されてないよ！\n先に自己紹介をしてね！`)] });
+  if (!uid) return i.reply({ embeds: [box(`${who(i)}\n\nUIDが登録されてないよ！\n先に <#${INTRO_CH}> で自己紹介をしてね！`)] });
 
   await i.deferReply({ ephemeral: true });
   const { p, raw, err } = await en.player(uid);
-  if (!p) return pub(i, err === 404 ? '登録されてるUIDのプレイヤーが見つからなかったよ。自己紹介からUIDを登録し直してね。' : '今うまく取れなかったよ。少し待ってからもう一度お願いします。');
-  if (!raw?.length) return pub(i, `<@${i.user.id}> さん、キャラの詳細が見られなかったよ。\nゲームのプロフィールで「キャラ詳細を表示」をオンにしてね。`);
+  if (!p) return pub(i, who(i) + '\n\n' + (err === 404 ? '登録されてるUIDのプレイヤーが見つからなかったよ。自己紹介からUIDを登録し直してね。' : '今うまく取れなかったよ。少し待ってからもう一度お願いします。'));
+  if (!raw?.length) return pub(i, `${who(i)}\n\nキャラの詳細が見られなかったよ。\nゲームのプロフィールで「キャラ詳細を表示」をオンにしてね。`);
 
   const nm = await en.names();
   const opts = raw.filter(a => relics(a).length).slice(0, 25).map(a => ({ label: nm[String(a.avatarId)] || `キャラ ${a.avatarId}`, value: String(a.avatarId) }));
-  if (!opts.length) return pub(i, `<@${i.user.id}> さん、聖遺物を付けてる展示キャラがいなかったよ。`);
+  if (!opts.length) return pub(i, `${who(i)}\n\n聖遺物を付けてる展示キャラがいなかったよ。`);
 
   const menu = new StringSelectMenuBuilder().setCustomId(`art_c_${uid}`).setPlaceholder('キャラを選ぶ').addOptions(opts);
   return i.editReply(ask('どのキャラの聖遺物を自慢する？', menu));
@@ -124,7 +127,7 @@ async function pickPart(i) {
   const emb = new EmbedBuilder()
     .setColor(r.c)
     .setAuthor({ name: `${i.member.displayName} さんの自慢の聖遺物`, iconURL: en.pfpIcon(p?.profilePicture) || i.user.displayAvatarURL() })
-    .setDescription(`## スコア ${v.toFixed(1)}${r.t ? `　${r.t}` : ''}\n${BASES[base].nm}基準`)
+    .setDescription(`${who(i)}\n## スコア ${v.toFixed(1)}${r.t ? `　${r.t}` : ''}\n${BASES[base].nm}基準`)
     .addFields({
       name: `${nm[aid] || ''} ／ ${en.loc(f.setNameTextMapHash)} ／ ${PARTS[f.equipType]} ＋${(e.reliquary.level || 1) - 1}`,
       value: `**${stat(m.mainPropId, m.statValue)}**\n${subs}`,
