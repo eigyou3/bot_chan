@@ -74,7 +74,7 @@ async function img(url) {
   }
 }
 
-// d: { name, el, lv, cons, tal:[A,E,Q], art, stats:[[名,値,強調?]], wp:{name,icon,lv,r,sub}, sets:[[名,数]], relics:[{icon,main,subs:[],score,best}], total, base, showScore, uid }
+// d: { name, el, lv, cons, tal:[A,E,Q], art, stats:[[名,値,強調?]], wp:{name,icon,lv,r,sub}, sets:[[名,数]], relics:[{icon,main,subs:[],score,best}], total, base, showOp, uid }
 async function charCard(d) {
   const [ac, tint, elName] = EL[d.el] || ['#888888', '#F2F2F2', ''];
   const [art, wpi, ...ris] = await Promise.all([img(d.art), img(d.wp?.icon), ...d.relics.map(r => img(r.icon))]);
@@ -141,7 +141,7 @@ async function charCard(d) {
   ctx.fillText(`Lv.${d.lv}`, 58, 80);
   const lw = ctx.measureText(`Lv.${d.lv}`).width;
   ctx.font = font('ZenMaruB', 30);
-  const ct = `${d.cons}凸`;
+  const ct = `C${d.cons}`;
   const cw = ctx.measureText(ct).width + 28;
   ctx.fillStyle = ac;
   rr(ctx, 58 + lw + 16, 46, cw, 46, 10);
@@ -149,24 +149,17 @@ async function charCard(d) {
   ctx.fillStyle = '#fff';
   ctx.fillText(ct, 58 + lw + 30, 80);
 
-  // 天賦 A E Q
+  // 天賦 A E Q（Lvの下）
+  let tx = 58;
   ['A', 'E', 'Q'].forEach((k, i) => {
-    const x = 58 + i * 128, y = AH - 100;
-    ctx.fillStyle = 'rgba(255,255,255,0.9)';
-    rr(ctx, x, y, 112, 54, 12);
-    ctx.fill();
-    ctx.strokeStyle = ac;
-    ctx.lineWidth = 2;
-    rr(ctx, x, y, 112, 54, 12);
-    ctx.stroke();
-    ctx.font = font('Hina', 28);
+    ctx.font = font('ZenMaruB', 30);
     ctx.fillStyle = ac;
-    ctx.fillText(k, x + 18, y + 37);
-    ctx.font = font('ZenMaruB', 32);
+    ctx.fillText(k, tx, 134);
+    tx += ctx.measureText(k).width + 8;
     ctx.fillStyle = INK;
-    ctx.textAlign = 'right';
-    ctx.fillText(String(d.tal[i] ?? '-'), x + 96, y + 38);
-    ctx.textAlign = 'left';
+    const v = String(d.tal[i] ?? '-');
+    ctx.fillText(v, tx, 134);
+    tx += ctx.measureText(v).width + 26;
   });
 
   // ---- ステータス
@@ -231,7 +224,7 @@ async function charCard(d) {
   ctx.fillStyle = INK;
   ctx.textAlign = 'left';
   ctx.fillText(setTxt, 64 + 92, y + 24);
-  if (d.showScore) {
+  if (d.showOp) {
     // 合計スコアだけ色付き
     ctx.font = font('ZenMaruB', 30);
     ctx.fillStyle = ac;
@@ -250,18 +243,30 @@ async function charCard(d) {
     ctx.fillStyle = '#FAFAFA';
     rr(ctx, x, y, TW, TH, 16);
     ctx.fill();
-    if (d.showScore && r.best) {
+    if (d.showOp && r.best) {
       ctx.strokeStyle = ac;
       ctx.lineWidth = 3;
       rr(ctx, x, y, TW, TH, 16);
       ctx.stroke();
     }
     const im = ris[i];
+
+    // OPなし＝画像だけ大きめに真ん中
+    if (!d.showOp) {
+      ctx.fillStyle = tint;
+      ctx.beginPath();
+      ctx.arc(x + TW / 2, y + TH / 2, 64, 0, Math.PI * 2);
+      ctx.fill();
+      if (im) ctx.drawImage(im, x + TW / 2 - 70, y + TH / 2 - 70, 140, 140);
+      return;
+    }
+
     ctx.fillStyle = tint;
     ctx.beginPath();
     ctx.arc(x + TW / 2, y + 56, 44, 0, Math.PI * 2);
     ctx.fill();
     if (im) ctx.drawImage(im, x + TW / 2 - 46, y + 10, 92, 92);
+    if (!r.main) return;
 
     ctx.textAlign = 'center';
     ctx.font = font('ZenMaruB', 24);
@@ -271,21 +276,9 @@ async function charCard(d) {
     ctx.fillStyle = '#666';
     r.subs.forEach((s, j) => ctx.fillText(s, x + TW / 2, y + 172 + j * 30));
 
-    // スコア（ランクがあれば左に小さく）
-    if (d.showScore) {
-      const sc = r.score.toFixed(1);
-      ctx.font = font('ZenMaruB', 32);
-      const sw = ctx.measureText(sc).width;
-      ctx.font = font('Hina', 22);
-      const kw = r.rank ? ctx.measureText(r.rank).width + 8 : 0;
-      const sx = x + (TW - sw - kw) / 2;
-      ctx.textAlign = 'left';
-      ctx.fillStyle = r.rank ? ac : SUB;
-      if (r.rank) ctx.fillText(r.rank, sx, y + TH - 24);
-      ctx.font = font('ZenMaruB', 32);
-      ctx.fillText(sc, sx + kw, y + TH - 22);
-      ctx.textAlign = 'center';
-    }
+    ctx.font = font('ZenMaruB', 32);
+    ctx.fillStyle = r.best ? ac : SUB;
+    ctx.fillText(r.score.toFixed(1), x + TW / 2, y + TH - 22);
   });
   y += TH;
 

@@ -139,4 +139,4 @@ async function pickPart(i) {
   return i.deleteReply().catch(() => null);
 }
 
-module.exports = { BASES, start, pickChar, pickBase, pickPart, score, rank };
+module.exports = { BASES, PARTS, ORDER, start, pickChar, pickBase, pickPart, score, rank, relics };

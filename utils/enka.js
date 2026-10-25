@@ -77,4 +77,7 @@ async function player(uid) {
 // 日本語テキスト（ステータス名・セット名など）
 const loc = k => ja[String(k)] || '';
 
-module.exports = { names, cleanUid, player, charIcon, pfpIcon, loc, UI };
+// キャラのデータ（元素・天賦の並びなど）
+const char = id => chr[String(id)] || null;
+
+module.exports = { names, cleanUid, player, charIcon, pfpIcon, loc, char, UI };

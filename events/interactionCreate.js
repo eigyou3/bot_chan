@@ -4,6 +4,7 @@ const { annRows } = require('../utils/annRows');
 const intro = require('../utils/intro');
 const art = require('../utils/artifact');
 const gift = require('../utils/gift');
+const chr = require('../utils/character');
 
 module.exports = {
   name: 'interactionCreate',
@@ -17,7 +18,7 @@ module.exports = {
 
     // 聖遺物自慢のメニュー
     if (interaction.isStringSelectMenu()) {
-      const run = { art_c: art.pickChar, art_b: art.pickBase, art_p: art.pickPart }[interaction.customId.slice(0, 5)];
+      const run = { art_c: art.pickChar, art_b: art.pickBase, art_p: art.pickPart, chr_c: chr.pickChar, chr_o: chr.pickOp, chr_b: chr.pickBase }[interaction.customId.slice(0, 5)];
       if (run) return run(interaction).catch(e => console.error('聖遺物エラー:', e.message));
       return;
     }
@@ -26,6 +27,7 @@ module.exports = {
       // UID登録
       if (interaction.customId.startsWith('intro_open_')) return intro.open(interaction).catch(e => console.error(e));
       if (interaction.customId === 'gift_open') return gift.open(interaction).catch(e => console.error(e));
+      if (interaction.customId === 'chr_end') return chr.end(interaction).catch(() => null);
       // 押すたびに付く/外れる
       if (interaction.customId.startsWith('ann_tg_')) {
         const id = interaction.customId.slice(7);
