@@ -1,14 +1,20 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const st = require('../utils/store');
+const vr = require('../utils/vcrank');
 
 module.exports = {
   name: 'voiceStateUpdate',
   async execute(oldState, newState, client) {
+    // ランキング集計
+    await vr.onVoice(oldState, newState).catch(e => console.error('VC集計エラー:', e.message));
+
     if (!newState.channelId) return;
     if (oldState.channelId === newState.channelId) return;
+    if (newState.member?.user.bot) return;
 
+    // 読み上げbotとかは数えない
     const vcChannel = newState.channel;
-    if (!vcChannel || vcChannel.members.size !== 1) return;
+    if (!vcChannel || newState.channelId === newState.guild.afkChannelId || vr.humans(vcChannel).size !== 1) return;
 
     const notifyChannelId = st.get(newState.guild.id).vc;
     if (!notifyChannelId) return;
@@ -36,5 +42,6 @@ module.exports = {
     );
 
     await notifyChannel.send({ embeds: [embed], components: [vcRow] }).catch(e => console.error('VC通知失敗:', e.message));
+    await vr.bump(newState.guild);
   },
 };

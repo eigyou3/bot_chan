@@ -1,11 +1,17 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const st = require('../utils/store');
 const wel = require('../utils/welcome');
+const vr = require('../utils/vcrank');
 const { parseVisitorMessage } = require('../utils/imageGenerator');
 
 module.exports = {
   name: 'messageCreate',
   async execute(message, client) {
+    // VCランキングを一番下に（自分の投稿は無視）
+    if (message.guild && message.author.id !== client.user.id && message.channelId === st.get(message.guildId).vc) {
+      vr.bump(message.guild).catch(() => null);
+    }
+
     if (message.author.bot) return;
 
     // --- 1. 来場予約の処理 ---

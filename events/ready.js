@@ -1,6 +1,7 @@
 const { REST, Routes } = require('discord.js');
 const st = require('../utils/store');
 const wel = require('../utils/welcome');
+const vr = require('../utils/vcrank');
 
 module.exports = {
   name: 'clientReady',
@@ -19,6 +20,7 @@ module.exports = {
 
     // 各サーバーの #bot-config から設定を戻す
     await st.loadAll(client);
+    await vr.init(client).catch(e => console.error('VC集計の初期化エラー:', e.message));
 
     // アラーム 1分ごとチェック
     let prev = '';
@@ -29,6 +31,7 @@ module.exports = {
 
       // 来客リマインド
       await wel.tick(client, now).catch(e => console.error('リマインド処理エラー:', e.message));
+      await vr.tick(client).catch(e => console.error('VC集計エラー:', e.message));
 
       for (const d of st.db.values()) {
         for (const a of d.alarms) {
