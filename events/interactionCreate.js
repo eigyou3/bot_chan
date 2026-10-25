@@ -1,6 +1,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const st = require('../utils/store');
 const { annRows } = require('../utils/annRows');
+const intro = require('../utils/intro');
 
 module.exports = {
   name: 'interactionCreate',
@@ -13,6 +14,8 @@ module.exports = {
     }
 
     if (interaction.isButton()) {
+      // UID登録
+      if (interaction.customId.startsWith('intro_open_')) return intro.open(interaction).catch(e => console.error(e));
       // 押すたびに付く/外れる
       if (interaction.customId.startsWith('ann_tg_')) {
         const id = interaction.customId.slice(7);
@@ -93,6 +96,7 @@ module.exports = {
     }
 
     if (interaction.isModalSubmit()) {
+      if (interaction.customId.startsWith('intro_mdl_')) return intro.submit(interaction).catch(e => console.error('UID登録エラー:', e.message));
       if (interaction.customId.startsWith('ann_mdl_')) {
         const pend = client.commands.get('announce').pend;
         const p = pend.get(interaction.customId.slice(8));
