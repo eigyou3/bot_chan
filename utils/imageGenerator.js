@@ -100,22 +100,33 @@ async function generateWelcomeImage(data, width = 1920, height = 1080) {
   const logoY = Math.round(height * 0.08);
   ctx.drawImage(logo, logoX, logoY, logoW, logoH);
 
-  // ゲスト情報 3行までは今まで通り、4組以上は詰める
+  // ゲスト情報 ロゴ下〜挨拶文上の余白の真ん中に置く
   const guests = data.guests || [];
   const n = guests.length;
-  const lineStartY = Math.round(height * (n > 3 ? 0.47 : 0.50));
-  const lineGap = n > 3 ? Math.round(height * 0.22 / (n - 1)) : Math.round(height * 0.10);
-  const fs = n > 3 ? Math.round(height * 0.055 * Math.max(0.5, 3 / n)) : Math.round(height * 0.055);
+  const top = logoY + logoH;
+  const btm = Math.round(height * 0.80) - Math.round(height * 0.030);
+  // 人数多い時は余白に収まるよう行間と文字を縮める
+  const gap = Math.min(Math.round(height * 0.10), Math.round((btm - top) * 0.7 / n));
+  const fs = Math.min(Math.round(height * 0.055), Math.round(gap * 0.62));
+  const mid = (top + btm) / 2;
+  const y0 = mid - (gap * (n - 1)) / 2 + fs * 0.35;  // 0.35はベースライン補正
 
-  ctx.textAlign = 'center';
+  // 時刻と名前で列をそろえる
+  ctx.font = `300 ${fs}px "${THIN}"`;
   ctx.fillStyle = '#222222';
+  ctx.textAlign = 'left';
+  const ts = guests.map(g => toFullWidthTime(g.time));
+  const tw = Math.max(...ts.map(t => ctx.measureText(t).width));
+  const nw = Math.max(...guests.map(g => ctx.measureText(g.name).width));
+  const sp = fs * 1.2;
+  const x0 = cx - (tw + sp + nw) / 2;
 
-  const offset = n === 1 ? lineGap : 0;
   guests.forEach((g, i) => {
-    const y = lineStartY + offset + i * lineGap;
-    ctx.font = `300 ${fs}px "${THIN}"`;
-    ctx.fillText(`${toFullWidthTime(g.time)}　　${g.name}`, cx, y);
+    const y = y0 + i * gap;
+    ctx.fillText(ts[i], x0, y);
+    ctx.fillText(g.name, x0 + tw + sp, y);
   });
+  ctx.textAlign = 'center';
 
   // 下部メッセージ
   if (SHOW_MESSAGE && WELCOME_MESSAGE) {
