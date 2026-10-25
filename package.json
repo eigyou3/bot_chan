@@ -7,7 +7,9 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "@fontsource/hina-mincho": "^5.3.0",
     "@fontsource/noto-sans-jp": "^5.2.9",
+    "@fontsource/zen-maru-gothic": "^5.3.1",
     "@napi-rs/canvas": "^0.1.99",
     "discord.js": "^14.15.3"
   },
