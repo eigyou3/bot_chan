@@ -138,8 +138,9 @@ function build(g, w, done) {
       { name: '⏱ 通話時間', value: row(w.time, fmt) },
     );
 
+  // 特賞は確定版だけ（途中は伏せとく）
   const sl = Object.entries(w.solo).sort((a, b) => b[1] - a[1]);
-  if (sl.length) {
+  if (done && sl.length) {
     e.addFields({ name: '🏅 特賞　ひとりでもVC賞', value: sl.map(([i, t]) => `<@${i}>　ひとりで${fmt(t)}`).join('\n') });
   }
 
