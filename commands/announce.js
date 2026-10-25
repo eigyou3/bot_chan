@@ -6,11 +6,12 @@ const pend = new Map();
 
 const cmd = new SlashCommandBuilder()
   .setName('announce')
-  .setDescription('アナウンスを送信（文章はポップアップで入力）');
+  .setDescription('アナウンスを送信（文章はポップアップで入力）')
+  // stickyは見落とさないよう一番上
+  .addBooleanOption(o => o.setName('sticky').setDescription('最下行に常駐（固定）させるか（デフォルト: いいえ）').setRequired(false));
 for (let i = 1; i <= 5; i++) {
   cmd.addRoleOption(o => o.setName(`role${i}`).setDescription(`付与・解除させたいロール${i}（空欄ならなし）`).setRequired(false));
 }
-cmd.addBooleanOption(o => o.setName('sticky').setDescription('最下行に常駐（固定）させるか（デフォルト: いいえ）').setRequired(false));
 
 module.exports = {
   data: cmd,
