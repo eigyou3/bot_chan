@@ -45,24 +45,30 @@ async function submit(i) {
   if (!uid) return i.editReply(errMsg[400]);
 
   const { p, err } = await en.player(uid);
-  if (!p) return i.editReply(errMsg[err] || '今うまく取れなかったよ。少し待ってからもう一度お願いします。');
+  // UIDの打ち間違いだけはやり直してもらう
+  if (!p && (err === 400 || err === 404)) return i.editReply(errMsg[err]);
 
   const msg = i.fields.getTextInputValue('msg').trim();
-  const nmap = await en.names();
-  const chars = (p.showAvatarInfoList || []).map(a => nmap[String(a.avatarId)]).filter(Boolean);
-
   const e = new EmbedBuilder()
     .setColor(COLOR)
     .setAuthor({ name: `${i.member.displayName} さんの自己紹介`, iconURL: i.user.displayAvatarURL() })
-    .setTitle(p.nickname || '（名前なし）')
-    .addFields(
-      { name: '冒険ランク', value: String(p.level ?? '-'), inline: true },
-      { name: '世界ランク', value: String(p.worldLevel ?? '-'), inline: true },
-      { name: 'アチーブメント', value: String(p.finishAchievementNum ?? '-'), inline: true },
-    )
     .setFooter({ text: `UID ${uid}` });
-  if (p.signature) e.setDescription(`「${p.signature}」`);
-  if (chars.length) e.addFields({ name: 'キャラ展示', value: chars.join(' ／ ') });
+
+  if (p) {
+    const nmap = await en.names();
+    const chars = (p.showAvatarInfoList || []).map(a => nmap[String(a.avatarId)]).filter(Boolean);
+    e.setTitle(p.nickname || i.member.displayName)
+      .addFields(
+        { name: '冒険ランク', value: String(p.level ?? '-'), inline: true },
+        { name: '世界ランク', value: String(p.worldLevel ?? '-'), inline: true },
+        { name: 'アチーブメント', value: String(p.finishAchievementNum ?? '-'), inline: true },
+      );
+    if (p.signature) e.setDescription(`「${p.signature}」`);
+    if (chars.length) e.addFields({ name: 'キャラ展示', value: chars.join(' ／ ') });
+  } else {
+    // 取れなかった時は最低限で
+    e.setTitle(i.member.displayName);
+  }
   if (msg) e.addFields({ name: 'ギルドのみんなへ一言', value: msg });
 
   const row = new ActionRowBuilder().addComponents(
