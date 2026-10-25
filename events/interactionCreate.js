@@ -1,5 +1,6 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const st = require('../utils/store');
+const { annRows } = require('../utils/annRows');
 
 module.exports = {
   name: 'interactionCreate',
@@ -12,6 +13,22 @@ module.exports = {
     }
 
     if (interaction.isButton()) {
+      // 押すたびに付く/外れる
+      if (interaction.customId.startsWith('ann_tg_')) {
+        const id = interaction.customId.slice(7);
+        const role = await interaction.guild.roles.fetch(id).catch(() => null);
+        const mem = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+        if (!role || !mem) return interaction.reply({ content: 'エラーが発生しました。', ephemeral: true });
+
+        if (mem.roles.cache.has(id)) {
+          await mem.roles.remove(role).catch(() => null);
+          return interaction.reply({ content: `🗑️ <@&${id}> を外しました。`, ephemeral: true });
+        }
+        await mem.roles.add(role).catch(() => null);
+        return interaction.reply({ content: `✅ <@&${id}> を付けました！`, ephemeral: true });
+      }
+
+      // 前の形式のボタン（古いアナウンス用に残してる）
       if (interaction.customId.startsWith('ann_btn_')) {
         const [_, __, action, roleId] = interaction.customId.split('_');
         const role = await interaction.guild.roles.fetch(roleId).catch(() => null);
@@ -77,25 +94,19 @@ module.exports = {
 
     if (interaction.isModalSubmit()) {
       if (interaction.customId.startsWith('ann_mdl_')) {
-        const parts = interaction.customId.split('_');
-        const roleId = parts[2];
-        const isSticky = parts[3] === '1';
-        const text = interaction.fields.getTextInputValue('announce_text');
+        const pend = client.commands.get('announce').pend;
+        const p = pend.get(interaction.customId.slice(8));
+        if (!p) return interaction.reply({ content: '時間が経ちすぎたので、もう一度 /announce からお願いします。', ephemeral: true });
+        pend.delete(interaction.customId.slice(8));
 
+        const text = interaction.fields.getTextInputValue('announce_text');
         const embed = new EmbedBuilder().setColor('#5865F2').setDescription(text);
-        const row = new ActionRowBuilder();
-        if (roleId !== 'none') {
-          row.addComponents(
-            new ButtonBuilder().setCustomId(`ann_btn_add_${roleId}`).setLabel('ロールを受け取る').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`ann_btn_remove_${roleId}`).setLabel('ロールを解除する').setStyle(ButtonStyle.Danger)
-          );
-        }
 
         await interaction.reply({ content: '送信しました。', ephemeral: true });
-        const msg = await interaction.channel.send({ embeds: [embed], components: row.components.length > 0 ? [row] : [] });
+        const msg = await interaction.channel.send({ embeds: [embed], components: annRows(interaction.guild, p.ids) });
 
-        if (isSticky) {
-          st.get(interaction.guildId).sticky[interaction.channelId] = { messageId: msg.id, text, roleId };
+        if (p.sticky) {
+          st.get(interaction.guildId).sticky[interaction.channelId] = { messageId: msg.id, text, roles: p.ids };
           await st.save(interaction.guild);
         }
       }

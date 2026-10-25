@@ -1,5 +1,6 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const st = require('../utils/store');
+const { annRows } = require('../utils/annRows');
 const wel = require('../utils/welcome');
 const vr = require('../utils/vcrank');
 const { parseVisitorMessage } = require('../utils/imageGenerator');
@@ -45,13 +46,9 @@ module.exports = {
       let cmp = old?.components;
       if (!old) {
         emb = [new EmbedBuilder().setColor('#5865F2').setDescription(sk.text)];
-        cmp = [];
-        if (sk.roleId && sk.roleId !== 'none') {
-          cmp.push(new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`ann_btn_add_${sk.roleId}`).setLabel('ロールを受け取る').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId(`ann_btn_remove_${sk.roleId}`).setLabel('ロールを解除する').setStyle(ButtonStyle.Danger)
-          ));
-        }
+        // 前の形式(roleId1個)もそのまま読む
+        const ids = sk.roles || (sk.roleId && sk.roleId !== 'none' ? [sk.roleId] : []);
+        cmp = annRows(message.guild, ids);
       }
 
       // 貼り直しは通知なし
