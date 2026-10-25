@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const st = require('../utils/store');
+const { isOwner, deny } = require('../utils/perm');
 
 // このサーバー専用
 const GUILD = '1480073192667091058';
@@ -24,6 +25,7 @@ module.exports = {
     if (interaction.guildId !== GUILD) {
       return interaction.reply({ content: '❌ このサーバーではこのコマンドを使用できません。', ephemeral: true });
     }
+    if (!isOwner(interaction)) return deny(interaction);
 
     // 💡 誰が使ったか非表示にするため、最初から ephemeral: true でコマンド自体への応答を完了させる
     await interaction.reply({ content: '✅ エントリー募集を開始しました。', ephemeral: true });

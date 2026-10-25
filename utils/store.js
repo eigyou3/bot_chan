@@ -67,4 +67,7 @@ function saveLater(g, ms = 15000) {
   tmr.set(g.id, setTimeout(() => save(g), ms));
 }
 
-module.exports = { CH_NAME, db, get, findCh, loadAll, save, saveLater };
+// bot-config無い時の注意書き
+const warn = g => findCh(g) ? '' : `\n⚠️ #${CH_NAME} が無いので再起動すると消えます`;
+
+module.exports = { CH_NAME, db, get, findCh, loadAll, save, saveLater, warn };
