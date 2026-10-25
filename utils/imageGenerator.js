@@ -111,20 +111,24 @@ async function generateWelcomeImage(data, width = 1920, height = 1080) {
   const mid = (top + btm) / 2;
   const y0 = mid - (gap * (n - 1)) / 2 + fs * 0.35;  // 0.35はベースライン補正
 
-  // 時刻と名前で列をそろえる
+  // 時刻・名前・様の3列でそろえる（様は一番長い名前の後ろ）
   ctx.font = `300 ${fs}px "${THIN}"`;
   ctx.fillStyle = '#222222';
   ctx.textAlign = 'left';
   const ts = guests.map(g => toFullWidthTime(g.time));
+  const ns = guests.map(g => g.name.replace(/　様$/, ''));
   const tw = Math.max(...ts.map(t => ctx.measureText(t).width));
-  const nw = Math.max(...guests.map(g => ctx.measureText(g.name).width));
+  const nw = Math.max(...ns.map(t => ctx.measureText(t).width));
+  const sw = ctx.measureText('様').width;
   const sp = fs * 1.2;
-  const x0 = cx - (tw + sp + nw) / 2;
+  const sp2 = ctx.measureText('　').width;
+  const x0 = cx - (tw + sp + nw + sp2 + sw) / 2;
 
   guests.forEach((g, i) => {
     const y = y0 + i * gap;
     ctx.fillText(ts[i], x0, y);
-    ctx.fillText(g.name, x0 + tw + sp, y);
+    ctx.fillText(ns[i], x0 + tw + sp, y);
+    ctx.fillText('様', x0 + tw + sp + nw + sp2, y);
   });
   ctx.textAlign = 'center';
 
