@@ -1,4 +1,5 @@
 const {
+  PermissionFlagsBits,
   SlashCommandBuilder,
   ActionRowBuilder,
   ModalBuilder,
@@ -34,7 +35,9 @@ module.exports = {
     ),
 
   async execute(interaction, client) {
-    if (!ALLOWED_USERS.includes(interaction.user.id)) {
+    // 登録した人か、そのサーバーの管理者だけ
+    const ok = ALLOWED_USERS.includes(interaction.user.id) || interaction.memberPermissions?.has(PermissionFlagsBits.Administrator);
+    if (!ok) {
       return interaction.reply({ content: 'このコマンドを実行する権限がありません。', ephemeral: true });
     }
 

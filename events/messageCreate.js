@@ -4,6 +4,9 @@ const wel = require('../utils/welcome');
 const vr = require('../utils/vcrank');
 const { parseVisitorMessage } = require('../utils/imageGenerator');
 
+// Welcomeは会社のサーバーだけ
+const WEL_GUILD = '1496054346385723472';
+
 module.exports = {
   name: 'messageCreate',
   async execute(message, client) {
@@ -16,7 +19,7 @@ module.exports = {
 
     // --- 1. 来場予約の処理 ---
     // 時間と様/さんが入ってたら反応（全角もOK）
-    if (message.guild && /[\d０-９]{1,2}\s*[：:時]\s*[\d０-９]{2}/.test(message.content) && /様|さん/.test(message.content)) {
+    if (message.guildId === WEL_GUILD && /[\d０-９]{1,2}\s*[：:時]\s*[\d０-９]{2}/.test(message.content) && /様|さん/.test(message.content)) {
       const parsed = parseVisitorMessage(message.content);
       if (parsed) {
         try {

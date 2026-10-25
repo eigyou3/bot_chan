@@ -1,7 +1,11 @@
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 const st = require('../utils/store');
 
+// このサーバー専用
+const GUILD = '1480073192667091058';
+
 module.exports = {
+  guild: GUILD,
   data: new SlashCommandBuilder()
     .setName('entry')
     .setDescription('大会の参戦募集を開始します')
@@ -17,6 +21,10 @@ module.exports = {
     ),
 
   async execute(interaction, client) {
+    if (interaction.guildId !== GUILD) {
+      return interaction.reply({ content: '❌ このサーバーではこのコマンドを使用できません。', ephemeral: true });
+    }
+
     // 💡 誰が使ったか非表示にするため、最初から ephemeral: true でコマンド自体への応答を完了させる
     await interaction.reply({ content: '✅ エントリー募集を開始しました。', ephemeral: true });
 

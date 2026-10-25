@@ -10,10 +10,16 @@ module.exports = {
     console.log(`ログイン完了: ${client.user.tag}`);
 
     // スラッシュコマンド登録
-    const cmds = client.commands.map(c => c.data.toJSON());
+    // guild指定ありのコマンドはそのサーバーだけに出す
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+    const all = [...client.commands.values()];
     try {
-      await rest.put(Routes.applicationCommands(client.user.id), { body: cmds });
+      await rest.put(Routes.applicationCommands(client.user.id), { body: all.filter(c => !c.guild).map(c => c.data.toJSON()) });
+      const gs = {};
+      for (const c of all.filter(c => c.guild)) (gs[c.guild] ||= []).push(c.data.toJSON());
+      for (const [gid, body] of Object.entries(gs)) {
+        await rest.put(Routes.applicationGuildCommands(client.user.id, gid), { body }).catch(e => console.error(`コマンド登録エラー(${gid}):`, e.message));
+      }
     } catch (e) {
       console.error('コマンド登録エラー:', e);
     }
