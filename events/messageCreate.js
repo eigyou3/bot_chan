@@ -1,4 +1,4 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const st = require('../utils/store');
 const wel = require('../utils/welcome');
 const vr = require('../utils/vcrank');
@@ -51,7 +51,8 @@ module.exports = {
         }
       }
 
-      const nw = await message.channel.send({ embeds: emb, components: cmp });
+      // 貼り直しは通知なし
+      const nw = await message.channel.send({ embeds: emb, components: cmp, flags: MessageFlags.SuppressNotifications });
       sk.messageId = nw.id;
       st.saveLater(message.guild);
     } catch (e) {

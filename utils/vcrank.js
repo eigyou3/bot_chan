@@ -1,4 +1,4 @@
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const st = require('./store');
 
 // 週間VCランキング
@@ -164,7 +164,7 @@ async function draw(g) {
   const emb = build(g, r.cur, false);
   const m = r.msg && await ch.messages.fetch(r.msg).catch(() => null);
   if (m) return m.edit({ embeds: [emb] }).catch(() => null);
-  const nw = await ch.send({ embeds: [emb] }).catch(() => null);
+  const nw = await ch.send({ embeds: [emb], flags: MessageFlags.SuppressNotifications }).catch(() => null);
   if (nw) { r.msg = nw.id; st.saveLater(g); }
 }
 

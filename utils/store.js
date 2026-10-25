@@ -1,4 +1,4 @@
-const { AttachmentBuilder } = require('discord.js');
+const { AttachmentBuilder, MessageFlags } = require('discord.js');
 
 // 各サーバーの #bot-config に config.json を置いて保存する
 const CH_NAME = 'bot-config';
@@ -45,7 +45,7 @@ async function write(g) {
   const ch = findCh(g);
   if (!ch) return false;
   const buf = Buffer.from(JSON.stringify(get(g.id), null, 2));
-  const m = await ch.send({ files: [new AttachmentBuilder(buf, { name: FILE })] });
+  const m = await ch.send({ files: [new AttachmentBuilder(buf, { name: FILE })], flags: MessageFlags.SuppressNotifications });
   const old = last.get(g.id);
   last.set(g.id, m.id);
   if (old) await ch.messages.delete(old).catch(() => null);
