@@ -1,8 +1,10 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle, AttachmentBuilder, MessageFlags } = require('discord.js');
 const st = require('./store');
 const en = require('./enka');
+const { charRow } = require('./charRow');
 
 const COLOR = '#1D9E75';
+const busy = new Map();
 
 // 案内（ボタン付き）
 function panel(roleId) {
@@ -13,6 +15,27 @@ function panel(roleId) {
     new ButtonBuilder().setCustomId(`intro_open_${roleId}`).setLabel('ギルドにUIDを登録する').setStyle(ButtonStyle.Success)
   );
   return { embeds: [e], components: [row] };
+}
+
+// 案内を置く（前のは消す）
+async function place(ch, roleId) {
+  const d = st.get(ch.guildId);
+  if (d.introP?.msg) await ch.messages.delete(d.introP.msg).catch(() => null);
+  const m = await ch.send({ ...panel(roleId), flags: MessageFlags.SuppressNotifications });
+  d.introP = { ch: ch.id, msg: m.id, role: roleId };
+  st.saveLater(ch.guild, 3000);
+}
+
+// 案内を一番下に戻す（連打防止つき）
+async function bump(ch) {
+  const p = st.get(ch.guildId).introP;
+  if (!p || p.ch !== ch.id || busy.get(ch.id)) return;
+  busy.set(ch.id, true);
+  try {
+    await place(ch, p.role);
+  } finally {
+    busy.set(ch.id, false);
+  }
 }
 
 // ボタン → フォーム
@@ -33,41 +56,50 @@ async function open(i) {
 const errMsg = {
   400: 'UIDの形が正しくないみたい。もう一度確認してね。',
   404: 'そのUIDのプレイヤーが見つからなかったよ。もう一度確認してね。',
-  424: '原神がメンテナンス中みたい。終わってからもう一度お願いします。',
-  429: '今ちょっと混んでるみたい。少し待ってからもう一度お願いします。',
 };
+const oops = (i, t) => i.followUp({ content: t, ephemeral: true });
 
-// フォーム送信 → カード投稿＋ロール
+// フォーム送信 → カード投稿＋ロール（成功時は本人への返事なし）
 async function submit(i) {
-  await i.deferReply({ ephemeral: true });
+  await i.deferUpdate();
   const roleId = i.customId.slice(10);
   const uid = en.cleanUid(i.fields.getTextInputValue('uid'));
-  if (!uid) return i.editReply(errMsg[400]);
+  if (!uid) return oops(i, errMsg[400]);
 
   const { p, err } = await en.player(uid);
   // UIDの打ち間違いだけはやり直してもらう
-  if (!p && (err === 400 || err === 404)) return i.editReply(errMsg[err]);
+  if (!p && (err === 400 || err === 404)) return oops(i, errMsg[err]);
 
   const msg = i.fields.getTextInputValue('msg').trim();
   const e = new EmbedBuilder()
     .setColor(COLOR)
-    .setAuthor({ name: `${i.member.displayName} さんの自己紹介`, iconURL: i.user.displayAvatarURL() })
     .setFooter({ text: `UID ${uid}` });
+  const files = [];
 
   if (p) {
-    const nmap = await en.names();
-    const chars = (p.showAvatarInfoList || []).map(a => nmap[String(a.avatarId)]).filter(Boolean);
-    e.setTitle(p.nickname || i.member.displayName)
+    await en.names();
+    const icon = en.pfpIcon(p.profilePicture) || i.user.displayAvatarURL();
+    e.setAuthor({ name: `${i.member.displayName} さんの自己紹介`, iconURL: icon })
+      .setTitle(p.nickname || i.member.displayName)
       .addFields(
         { name: '冒険ランク', value: String(p.level ?? '-'), inline: true },
         { name: '世界ランク', value: String(p.worldLevel ?? '-'), inline: true },
         { name: 'アチーブメント', value: String(p.finishAchievementNum ?? '-'), inline: true },
       );
     if (p.signature) e.setDescription(`「${p.signature}」`);
-    if (chars.length) e.addFields({ name: 'キャラ展示', value: chars.join(' ／ ') });
+
+    const sh = p.showAvatarInfoList || [];
+    if (sh.length) {
+      const buf = await charRow(sh.map(a => ({ url: en.charIcon(a), lv: a.level }))).catch(() => null);
+      if (buf) {
+        files.push(new AttachmentBuilder(buf, { name: 'chars.png' }));
+        e.addFields({ name: 'キャラ展示', value: '​' }).setImage('attachment://chars.png');
+      }
+    }
   } else {
     // 取れなかった時は最低限で
-    e.setTitle(i.member.displayName);
+    e.setAuthor({ name: `${i.member.displayName} さんの自己紹介`, iconURL: i.user.displayAvatarURL() })
+      .setTitle(i.member.displayName);
   }
   if (msg) e.addFields({ name: 'ギルドのみんなへ一言', value: msg });
 
@@ -83,15 +115,15 @@ async function submit(i) {
     const ch = await i.client.channels.fetch(old.ch).catch(() => null);
     if (ch) await ch.messages.delete(old.msg).catch(() => null);
   }
-  const m = await i.channel.send({ embeds: [e], components: [row] });
+  const m = await i.channel.send({ embeds: [e], components: [row], files });
   d.intro[i.user.id] = { ch: i.channelId, msg: m.id, uid };
   st.saveLater(i.guild, 3000);
 
   const role = await i.guild.roles.fetch(roleId).catch(() => null);
-  let ok = true;
-  if (role) ok = await i.member.roles.add(role).then(() => true).catch(() => false);
+  const ok = role ? await i.member.roles.add(role).then(() => true).catch(() => false) : true;
+  if (!ok) await oops(i, 'ロールが付けられなかったので、管理者に連絡してね。');
 
-  return i.editReply(ok ? '✅ 登録したよ！ようこそ✨️' : '✅ 登録したよ！（ロールが付けられなかったので管理者に連絡してね）');
+  await bump(i.channel);
 }
 
-module.exports = { panel, open, submit };
+module.exports = { panel, place, bump, open, submit };

@@ -1,6 +1,7 @@
 const { EmbedBuilder, MessageFlags } = require('discord.js');
 const st = require('../utils/store');
 const { annRows } = require('../utils/annRows');
+const intro = require('../utils/intro');
 const wel = require('../utils/welcome');
 const { parseVisitorMessage } = require('../utils/imageGenerator');
 
@@ -10,6 +11,11 @@ const WEL_GUILD = '1496054346385723472';
 module.exports = {
   name: 'messageCreate',
   async execute(message, client) {
+    // UID登録の案内を一番下に（自分の投稿は無視）
+    if (message.guild && message.author.id !== client.user.id && st.get(message.guildId).introP?.ch === message.channelId) {
+      intro.bump(message.channel).catch(() => null);
+    }
+
     if (message.author.bot) return;
 
     // --- 1. 来場予約の処理 ---
