@@ -9,7 +9,7 @@ const last = new Map();  // guildId -> 保存メッセージID
 const tmr = new Map();   // 遅延保存用
 const q = new Map();     // 保存の順番待ち
 
-const blank = () => ({ vc: null, sticky: {}, alarms: [], entry: {} });
+const blank = () => ({ vc: null, sticky: {}, alarms: [], entry: {}, welcome: {} });
 
 function findCh(g) {
   return g.channels.cache.find(c => c.name === CH_NAME && c.isTextBased());

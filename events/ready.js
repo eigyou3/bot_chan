@@ -1,8 +1,9 @@
 const { REST, Routes } = require('discord.js');
 const st = require('../utils/store');
+const wel = require('../utils/welcome');
 
 module.exports = {
-  name: 'ready',
+  name: 'clientReady',
   once: true,
   async execute(client) {
     console.log(`ログイン完了: ${client.user.tag}`);
@@ -25,6 +26,9 @@ module.exports = {
       const now = new Date().toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour: '2-digit', minute: '2-digit', hour12: false });
       if (now === prev) return;
       prev = now;
+
+      // 来客リマインド
+      await wel.tick(client, now).catch(e => console.error('リマインド処理エラー:', e.message));
 
       for (const d of st.db.values()) {
         for (const a of d.alarms) {

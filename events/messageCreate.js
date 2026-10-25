@@ -1,7 +1,7 @@
-const { EmbedBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const st = require('../utils/store');
-
-const NOTIFY_ROLE_ID = '1496147336043298866';
+const wel = require('../utils/welcome');
+const { parseVisitorMessage } = require('../utils/imageGenerator');
 
 module.exports = {
   name: 'messageCreate',
@@ -9,37 +9,14 @@ module.exports = {
     if (message.author.bot) return;
 
     // --- 1. 来場予約の処理 ---
-    // 時間（HH:MM形式）と様/さんが含まれる場合に反応
-    const hasTimeAndName =
-      /[\d０-９]{1,2}[：:][\d０-９]{2}/.test(message.content) &&
-      /様|さん/.test(message.content);
-
-    if (hasTimeAndName) {
-      const { parseVisitorMessage, generateWelcomeImage } = require('../utils/imageGenerator');
+    // 時間と様/さんが入ってたら反応（全角もOK）
+    if (message.guild && /[\d０-９]{1,2}\s*[：:時]\s*[\d０-９]{2}/.test(message.content) && /様|さん/.test(message.content)) {
       const parsed = parseVisitorMessage(message.content);
-
       if (parsed) {
         try {
-          const buffer = await generateWelcomeImage(parsed, 1920, 1080);
-          const file = new AttachmentBuilder(buffer, { name: 'welcome.jpg' });
-
-          const member = message.member;
-          const roleColor = member?.roles?.color?.hexColor ?? '#808080';
-
-          const names = parsed.guests.map(g => g.name).join('・');
-
-          const embed = new EmbedBuilder()
-            .setColor(roleColor)
-            .setDescription(
-              `<@${message.author.id}> ！\n` +
-              `${names}のウェルカムを作成したよ！\n\n` +
-              `<@&${NOTIFY_ROLE_ID}> みんなにも共有しておくね！`
-            )
-            .setImage('attachment://welcome.jpg');
-
-          await message.reply({ embeds: [embed], files: [file] });
-        } catch (error) {
-          console.error(error);
+          await wel.handle(message, parsed);
+        } catch (e) {
+          console.error(e);
         }
         return;
       }
