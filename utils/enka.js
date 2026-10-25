@@ -6,7 +6,7 @@ const UI = 'https://enka.network/ui/';
 
 let nm = null, nmAt = 0;
 let chr = {}, pfp = {};
-const cache = new Map();  // uid -> { at, ttl, p }
+const cache = new Map();  // uid -> { at, ttl, p, av }
 
 // キャラ名・アイコン・プロフィールアイコンのデータ（1日キャッシュ）
 async function names() {
@@ -54,19 +54,23 @@ function cleanUid(s) {
 
 async function player(uid) {
   const c = cache.get(uid);
-  if (c && Date.now() - c.at < c.ttl * 1000) return { p: c.p };
+  if (c && Date.now() - c.at < c.ttl * 1000) return { p: c.p, av: c.av };
 
   let r;
   try {
-    r = await fetch(`https://enka.network/api/uid/${uid}/?info`, { headers: { 'User-Agent': UA } });
+    // キャラ詳細（凸）も欲しいので?infoは付けない
+    r = await fetch(`https://enka.network/api/uid/${uid}/`, { headers: { 'User-Agent': UA } });
   } catch {
     return { err: 503 };
   }
   if (!r.ok) return { err: r.status };
   const j = await r.json().catch(() => null);
   if (!j?.playerInfo) return { err: 404 };
-  cache.set(uid, { at: Date.now(), ttl: j.ttl || 60, p: j.playerInfo });
-  return { p: j.playerInfo };
+  // 凸数 = talentIdListの数（詳細非公開の人は無し）
+  const av = {};
+  for (const a of j.avatarInfoList || []) av[a.avatarId] = (a.talentIdList || []).length;
+  cache.set(uid, { at: Date.now(), ttl: j.ttl || 60, p: j.playerInfo, av });
+  return { p: j.playerInfo, av };
 }
 
 module.exports = { names, cleanUid, player, charIcon, pfpIcon };

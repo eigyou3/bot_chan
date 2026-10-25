@@ -1,7 +1,7 @@
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 
 // キャラアイコンを横4つずつ並べた画像を作る
-const W = 180, H = 210, GAP = 16, PER = 4;
+const W = 92, H = 112, GAP = 8, PER = 4;
 
 async function img(url) {
   try {
@@ -28,16 +28,18 @@ async function charRow(list) {
     // 下地
     ctx.fillStyle = '#3a3c43';
     ctx.beginPath();
-    ctx.roundRect(x, y, W, H, 18);
+    ctx.roundRect(x, y, W, H, 10);
     ctx.fill();
 
     const im = ims[i];
-    if (im) ctx.drawImage(im, x + 10, y + 6, W - 20, W - 20);
+    if (im) ctx.drawImage(im, x + 6, y + 4, W - 12, W - 12);
 
     ctx.fillStyle = '#e8e8e8';
-    ctx.font = '26px "NotoSansJP-Black"';
+    ctx.font = '14px "NotoSansJP-Black"';
     ctx.textAlign = 'center';
-    ctx.fillText(c.lv ? `Lv.${c.lv}` : (c.name || ''), x + W / 2, y + H - 16);
+    // 凸が分かる人だけ C◯ を付ける
+    const t = (c.lv ? `Lv.${c.lv}` : '') + (c.c != null ? `  C${c.c}` : '');
+    ctx.fillText(t, x + W / 2, y + H - 9);
   });
 
   return cv.toBuffer('image/png');
