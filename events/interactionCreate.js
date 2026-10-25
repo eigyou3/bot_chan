@@ -2,6 +2,7 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const st = require('../utils/store');
 const { annRows } = require('../utils/annRows');
 const intro = require('../utils/intro');
+const art = require('../utils/artifact');
 
 module.exports = {
   name: 'interactionCreate',
@@ -10,6 +11,13 @@ module.exports = {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
       try { await command.execute(interaction, client); } catch (error) { console.error(error); }
+      return;
+    }
+
+    // 聖遺物自慢のメニュー
+    if (interaction.isStringSelectMenu()) {
+      const run = interaction.customId.startsWith('art_c_') ? art.pickChar : interaction.customId.startsWith('art_p_') ? art.pickPart : null;
+      if (run) return run(interaction).catch(e => console.error('聖遺物エラー:', e.message));
       return;
     }
 
