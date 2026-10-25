@@ -42,6 +42,5 @@ module.exports = {
     );
 
     await notifyChannel.send({ embeds: [embed], components: [vcRow] }).catch(e => console.error('VC通知失敗:', e.message));
-    await vr.bump(newState.guild);
   },
 };

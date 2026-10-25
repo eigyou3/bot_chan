@@ -10,7 +10,6 @@ const KING = '今週のVC王';
 const SOLO_KING = 'ソロでもプレイ王';
 const COLOR = '#534AB7';
 
-const busy = new Map();  // bump連打防止
 const lastSv = new Map();
 
 const blankWk = wk => ({ wk, calls: 0, total: 0, start: {}, last: {}, time: {}, solo: {} });
@@ -71,7 +70,7 @@ function endSolo(r, s) {
 function sync(g, cid, leaver) {
   const r = vd(g.id);
   const ch = g.channels.cache.get(cid);
-  if (!ch || cid === g.afkChannelId) return;
+  if (!ch || cid === g.afkChannelId) return false;
   const hs = humans(ch);
   let s = r.sess[cid];
 
@@ -80,8 +79,9 @@ function sync(g, cid, leaver) {
       endSolo(r, s);
       if (s.multi && leaver) add(r.cur.last, leaver);
       delete r.sess[cid];
+      return s.multi;  // 2人以上の通話が終わった
     }
-    return;
+    return false;
   }
 
   if (!s) s = r.sess[cid] = { starter: hs.first().id, since: Date.now(), multi: false, solo: null, soloT: 0 };
@@ -98,6 +98,7 @@ function sync(g, cid, leaver) {
     const id = hs.first().id;
     if (s.solo !== id) { endSolo(r, s); s.solo = id; }
   }
+  return false;
 }
 
 async function onVoice(o, n) {
@@ -107,10 +108,11 @@ async function onVoice(o, n) {
   if (!st.get(g.id).vc) return;
   await rollover(g);
   accrue(g);
-  if (o.channelId) sync(g, o.channelId, n.member.id);
+  const end = o.channelId ? sync(g, o.channelId, n.member.id) : false;
   if (n.channelId) sync(g, n.channelId);
   st.saveLater(g);
-  await draw(g);
+  // 通話が終わった時だけ途中経過を出す
+  if (end) await post(g);
 }
 
 // 1位（同率は全部）
@@ -121,67 +123,56 @@ function top(o) {
 }
 
 function build(g, w, done) {
-  const r = vd(g.id);
   const ms = ids => ids.map(i => `<@${i}>`).join('・');
-  const row = (o, f) => { const t = top(o); return t.ids.length ? `${ms(t.ids)}　${f(t.v)}` : 'まだいないよ'; };
+  const line = (lb, o, f) => { const t = top(o); return t.ids.length ? `${lb}1位　${ms(t.ids)} さん（${f(t.v)}）` : null; };
+  const rk = [
+    line('通話を始めた回数', w.start, v => `${v}回`),
+    line('通話に最後までいた回数', w.last, v => `${v}回`),
+    line('累計通話時間', w.time, fmt),
+  ].filter(Boolean);
 
   const e = new EmbedBuilder()
     .setColor(COLOR)
     .setTitle(done ? '先週のVCランキング（確定）' : '今週のVCランキング（途中経過）')
     .setDescription(`${day(w.wk)} 〜 ${day(w.wk + 7 * 86400000)}`)
     .addFields(
-      { name: '通話回数', value: `${w.calls}回`, inline: true },
-      { name: '通話時間', value: fmt(w.total), inline: true },
-      { name: '​', value: '​', inline: true },
-      { name: '📞 通話を始めた回数', value: row(w.start, v => `${v}回`) },
-      { name: '🚪 最後まで残った回数', value: row(w.last, v => `${v}回`) },
-      { name: '⏱ 通話時間', value: row(w.time, fmt) },
+      { name: '累計通話回数', value: `${w.calls}回`, inline: true },
+      { name: '累計通話時間', value: fmt(w.total), inline: true },
     );
 
-  // 特賞は確定版だけ（途中は伏せとく）
+  let txt = rk.join('\n');
+  if (done && rk.length) txt += `\nに、ロール：${roleTxt(g, KING)} を付与したよ！`;
+  if (txt) e.addFields({ name: '​', value: txt });
+
+  // 特賞は確定版だけ、いる時だけ
   const sl = Object.entries(w.solo).sort((a, b) => b[1] - a[1]);
   if (done && sl.length) {
-    e.addFields({ name: '🏅 特賞　ひとりでもVC賞', value: sl.map(([i, t]) => `<@${i}>　ひとりで${fmt(t)}`).join('\n') });
+    e.addFields({
+      name: '特賞　ひとりでもVC賞',
+      value: sl.map(([i, t]) => `<@${i}> さん（ひとりで${fmt(t)}）`).join('\n') + `\nに、ロール：${roleTxt(g, SOLO_KING)} を付与したよ！`,
+    });
   }
 
-  if (!done) {
-    const now = Object.entries(r.sess)
-      .map(([cid, s]) => [g.channels.cache.get(cid), s])
-      .filter(([c]) => c && humans(c).size)
-      .map(([c, s]) => `🔊 ${c.name}　${humans(c).size}人（<t:${Math.floor(s.since / 1000)}:R>から）`);
-    if (now.length) e.addFields({ name: 'いま通話中', value: now.join('\n') });
-    e.setFooter({ text: '日曜 21:00 に確定' });
-  }
+  if (!done) e.setFooter({ text: '日曜 21:00 に確定' });
   return e;
 }
 
-// 途中経過のEmbedを書き換え（無ければ投稿）
-async function draw(g) {
+// ロールがあればメンション表記、無ければ名前だけ
+function roleTxt(g, nm) {
+  const r = g.roles.cache.find(x => x.name === nm);
+  return r ? `<@&${r.id}>` : nm;
+}
+
+// 途中経過を投稿し直す（張り付かせない）
+async function post(g) {
   const d = st.get(g.id);
   const ch = d.vc && g.channels.cache.get(d.vc);
   if (!ch) return;
   const r = vd(g.id);
-  const emb = build(g, r.cur, false);
-  const m = r.msg && await ch.messages.fetch(r.msg).catch(() => null);
-  if (m) return m.edit({ embeds: [emb] }).catch(() => null);
-  const nw = await ch.send({ embeds: [emb], flags: MessageFlags.SuppressNotifications }).catch(() => null);
-  if (nw) { r.msg = nw.id; st.saveLater(g); }
-}
-
-// 一番下に持ってくる
-async function bump(g) {
-  const d = st.get(g.id);
-  const ch = d.vc && g.channels.cache.get(d.vc);
-  if (!ch || busy.get(g.id)) return;
-  busy.set(g.id, true);
-  try {
-    const r = vd(g.id);
-    if (r.msg) await ch.messages.delete(r.msg).catch(() => null);
-    r.msg = null;
-    await draw(g);
-  } finally {
-    busy.set(g.id, false);
-  }
+  if (r.msg) await ch.messages.delete(r.msg).catch(() => null);
+  const m = await ch.send({ embeds: [build(g, r.cur, false)], flags: MessageFlags.SuppressNotifications }).catch(() => null);
+  r.msg = m?.id || null;
+  st.saveLater(g);
 }
 
 async function roles(g, w) {
@@ -214,16 +205,20 @@ async function rollover(g) {
   if (ch) {
     if (r.msg) await ch.messages.delete(r.msg).catch(() => null);
     if (r.res) await ch.messages.delete(r.res).catch(() => null);
-    const m = await ch.send({ embeds: [build(g, old, true)] }).catch(() => null);
-    r.res = m?.id || null;
+    r.res = null;
+    // 誰も通話してない週は何も出さない
+    if (old.calls || Object.keys(old.solo).length) {
+      await roles(g, old);
+      const m = await ch.send({ embeds: [build(g, old, true)] }).catch(() => null);
+      r.res = m?.id || null;
+    }
   }
   r.msg = null;
-  await roles(g, old);
 
-  // 続いてる通話は新しい週に持ち越し（回数は数え直さない）
+  // 続いてる通話は新しい週の1回目として持ち越し（始めた人はカウントしない）
   r.cur = blankWk(wk);
+  r.cur.calls = Object.values(r.sess).filter(s => s.multi).length;
   r.ts = Date.now();
-  await draw(g);
   await st.save(g);
   return true;
 }
@@ -243,11 +238,10 @@ async function init(client) {
       sync(g, c.id);
     });
     await rollover(g);
-    await draw(g);
   }
 }
 
-// 毎分：通話中なら書き換え、週替わりチェック
+// 毎分：時間の足し込みと週替わりチェック
 async function tick(client) {
   for (const g of client.guilds.cache.values()) {
     if (!st.get(g.id).vc) continue;
@@ -256,7 +250,6 @@ async function tick(client) {
     if (!Object.keys(r.sess).length) continue;
     accrue(g);
     for (const cid of Object.keys(r.sess)) sync(g, cid);
-    await draw(g);
     // 通話中の保存は5分おき
     if (Date.now() - (lastSv.get(g.id) || 0) > 300000) {
       lastSv.set(g.id, Date.now());
@@ -265,4 +258,4 @@ async function tick(client) {
   }
 }
 
-module.exports = { onVoice, bump, init, tick, humans };
+module.exports = { onVoice, init, tick, humans };
