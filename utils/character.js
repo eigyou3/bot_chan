@@ -1,4 +1,5 @@
 const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
+
 const st = require('./store');
 const en = require('./enka');
 const art = require('./artifact');
@@ -39,6 +40,18 @@ async function build(a, uid, base, showOp) {
   const artUrl = cos?.art ? `${en.UI}${cos.art}.png` : side ? `${en.UI}UI_Gacha_AvatarImg_${side}.png` : null;
 
   // 天賦（凸で上がった分も足す）
+  // キャラ詳細が非公開＝取れるのはキャラ・Lv・衣装だけ
+  if (a.lim) {
+    return {
+      name: nm[String(a.avatarId)] || '？', el, lv: a.level ?? '-',
+      cons: a.talentLevel ?? null, tal: ['-', '-', '-'], art: artUrl,
+      stats: ['HP', '攻撃力', '防御力', '元素熟知', '会心率', '会心ダメージ', '元素チャージ効率', '元素ダメージ'].map(k => [k, '-']),
+      wp: { name: '-', lv: '-', r: null, sub: '' },
+      sets: [['-', 0]], relics: art.ORDER.map(() => ({ icon: null })),
+      total: 0, base: '', showOp: false, uid,
+    };
+  }
+
   const tal = (c.SkillOrder || []).map(id => (a.skillLevelMap?.[id] || 0) + (a.proudSkillExtraLevelMap?.[c.ProudMap?.[id]] || 0));
 
   // 元素ダメと物理の高い方
@@ -101,6 +114,9 @@ async function build(a, uid, base, showOp) {
   };
 }
 
+// 詳細が見られない人は展示キャラだけで
+const list = (p, raw) => raw?.length ? raw : (p?.showAvatarInfoList || []).map(x => ({ ...x, lim: true }));
+
 // 本人だけのメニュー
 function charMenu(uid, raw, nm, t) {
   const opts = raw.slice(0, 25).map(a => ({ label: nm[String(a.avatarId)] || `キャラ ${a.avatarId}`, value: String(a.avatarId) }));
@@ -122,16 +138,19 @@ async function start(i) {
   await i.deferReply({ ephemeral: true });
   const { p, raw, err } = await en.player(uid);
   if (!p) return pub(i, err === 404 ? '登録されてるUIDのプレイヤーが見つからなかったよ。自己紹介からUIDを登録し直してね。' : '今うまく取れなかったよ。少し待ってからもう一度お願いします。');
-  if (!raw?.length) return pub(i, 'キャラの詳細が見られなかったよ。\nゲームのプロフィールで「キャラ詳細を表示」をオンにしてね。');
+  const ls = list(p, raw);
+  if (!ls.length) return pub(i, '展示してるキャラがいなかったよ。');
 
   const nm = await en.names();
-  return i.editReply(charMenu(uid, raw, nm, 'どのキャラを出す？'));
+  return i.editReply(charMenu(uid, ls, nm, 'どのキャラを出す？'));
 }
 
-// キャラ → OPを出すか
-function pickChar(i) {
+// キャラ → OPを出すか（詳細が見られない人はそのまま投稿）
+async function pickChar(i) {
   const uid = i.customId.split('_')[2];
   const aid = i.values[0];
+  const { raw } = await en.player(uid);
+  if (!raw?.length) return post(i, uid, aid, null, false);
   const menu = new StringSelectMenuBuilder().setCustomId(`chr_o_${uid}_${aid}`).setPlaceholder('聖遺物のOPを出す？').addOptions(
     { label: 'OPとスコアを出す', value: '1' },
     { label: '聖遺物の画像だけ', value: '0' },
@@ -156,21 +175,20 @@ function pickBase(i) {
 // 画像を作って投稿 → キャラ選択に戻す
 async function post(i, uid, aid, base, showOp) {
   await i.update({ embeds: [box('作ってるよ…')], components: [] });
-  const { raw } = await en.player(uid);
-  const a = raw?.find(x => String(x.avatarId) === aid);
+  const { p, raw } = await en.player(uid);
+  const ls = list(p, raw);
+  const a = ls.find(x => String(x.avatarId) === aid);
   if (!a) return i.editReply({ embeds: [box('データが取れなかったよ。もう一度 /character からお願いします。')], components: [] });
 
   const d = await build(a, uid, base, showOp);
   const buf = await charCard(d);
   const ac = (EL[d.el] || [COLOR])[0];
-  const e = new EmbedBuilder().setColor(ac).setDescription(who(i)).setImage('attachment://character.png');
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setLabel('詳しいビルドを見る').setStyle(ButtonStyle.Link).setURL(`https://enka.network/u/${uid}/`)
-  );
-  await i.channel.send({ embeds: [e], files: [new AttachmentBuilder(buf, { name: 'character.png' })], components: [row] });
+  const note = a.lim ? '\nキャラ詳細が非公開のため、わかる範囲で作ったよ' : '';
+  const e = new EmbedBuilder().setColor(ac).setDescription(who(i) + note).setImage('attachment://character.png');
+  await i.channel.send({ embeds: [e], files: [new AttachmentBuilder(buf, { name: 'character.png' })] });
 
   const nm = await en.names();
-  return i.editReply(charMenu(uid, raw, nm, '続けて出すならキャラを選んでね'));
+  return i.editReply(charMenu(uid, ls, nm, '続けて出すならキャラを選んでね'));
 }
 
 function end(i) {

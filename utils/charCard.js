@@ -140,14 +140,16 @@ async function charCard(d) {
   ctx.fillStyle = INK;
   ctx.fillText(`Lv.${d.lv}`, 58, 80);
   const lw = ctx.measureText(`Lv.${d.lv}`).width;
-  ctx.font = font('ZenMaruB', 30);
-  const ct = `C${d.cons}`;
-  const cw = ctx.measureText(ct).width + 28;
-  ctx.fillStyle = ac;
-  rr(ctx, 58 + lw + 16, 46, cw, 46, 10);
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.fillText(ct, 58 + lw + 30, 80);
+  if (d.cons != null) {
+    ctx.font = font('ZenMaruB', 30);
+    const ct = `C${d.cons}`;
+    const cw = ctx.measureText(ct).width + 28;
+    ctx.fillStyle = ac;
+    rr(ctx, 58 + lw + 16, 46, cw, 46, 10);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillText(ct, 58 + lw + 30, 80);
+  }
 
   // 天賦 A E Q（Lvの下）
   let tx = 58;
@@ -205,20 +207,22 @@ async function charCard(d) {
   ctx.fillStyle = INK;
   ctx.fillText(d.wp.name, 188, y + 42);
   const ww = ctx.measureText(d.wp.name).width;
-  ctx.font = font('ZenMaruB', 26);
-  const rt = `R${d.wp.r}`;
-  ctx.fillStyle = ac;
-  rr(ctx, 188 + ww + 14, y + 12, ctx.measureText(rt).width + 22, 38, 8);
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.fillText(rt, 188 + ww + 25, y + 40);
+  if (d.wp.r != null) {
+    ctx.font = font('ZenMaruB', 26);
+    const rt = `R${d.wp.r}`;
+    ctx.fillStyle = ac;
+    rr(ctx, 188 + ww + 14, y + 12, ctx.measureText(rt).width + 22, 38, 8);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillText(rt, 188 + ww + 25, y + 40);
+  }
   ctx.font = font('ZenMaru', 26);
   ctx.fillStyle = SUB;
   ctx.fillText(`Lv.${d.wp.lv}　${d.wp.sub || ''}`, 188, y + 84);
   y += 124;
 
   // ---- 聖遺物
-  const setTxt = d.sets.map(([n, c]) => `${n}×${c}`).join('　');
+  const setTxt = d.sets.filter(([, c]) => c).map(([n, c]) => `${n}×${c}`).join('　');
   head('聖遺物', y + 24);
   ctx.font = font('ZenMaru', 24);
   ctx.fillStyle = INK;
