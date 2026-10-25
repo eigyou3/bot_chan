@@ -46,9 +46,6 @@ async function open(i) {
     new ActionRowBuilder().addComponents(
       new TextInputBuilder().setCustomId('uid').setLabel('UID').setStyle(TextInputStyle.Short).setMinLength(9).setMaxLength(12).setRequired(true)
     ),
-    new ActionRowBuilder().addComponents(
-      new TextInputBuilder().setCustomId('msg').setLabel('ギルドのみんなへ一言').setStyle(TextInputStyle.Paragraph).setMaxLength(300).setRequired(false)
-    ),
   );
   return i.showModal(m);
 }
@@ -70,7 +67,6 @@ async function submit(i) {
   // UIDの打ち間違いだけはやり直してもらう
   if (!p && (err === 400 || err === 404)) return oops(i, errMsg[err]);
 
-  const msg = i.fields.getTextInputValue('msg').trim();
   const e = new EmbedBuilder()
     .setColor(COLOR)
     .setFooter({ text: `UID ${uid}` });
@@ -80,15 +76,14 @@ async function submit(i) {
     await en.names();
     const icon = en.pfpIcon(p.profilePicture) || i.user.displayAvatarURL();
     e.setAuthor({ name: `${i.member.displayName} さんの自己紹介`, iconURL: icon })
-      .setTitle(p.nickname?.trim() || i.member.displayName)
       .addFields(
         { name: '冒険ランク', value: String(p.level ?? '-'), inline: true },
         { name: '世界ランク', value: String(p.worldLevel ?? '-'), inline: true },
         { name: 'アチーブメント', value: String(p.finishAchievementNum ?? '-'), inline: true },
       );
-    if (p.signature?.trim()) e.setDescription(`「${p.signature.trim()}」`);
-    // 一言はキャラ展示より上（画像はEmbedの一番下にしか置けないので）
-    if (msg) e.addFields({ name: 'ギルドのみんなへ一言', value: msg });
+    // 名前は見出しで大きく（タイトルは文字サイズ変えられないので）
+    const sg = p.signature?.trim();
+    e.setDescription(`## ${p.nickname?.trim() || i.member.displayName}` + (sg ? `\n「${sg}」` : ''));
 
     const sh = p.showAvatarInfoList || [];
     if (sh.length) {
@@ -101,8 +96,7 @@ async function submit(i) {
   } else {
     // 取れなかった時は最低限で
     e.setAuthor({ name: `${i.member.displayName} さんの自己紹介`, iconURL: i.user.displayAvatarURL() })
-      .setTitle(i.member.displayName);
-    if (msg) e.addFields({ name: 'ギルドのみんなへ一言', value: msg });
+      .setDescription(`## ${i.member.displayName}`);
   }
 
   const row = new ActionRowBuilder().addComponents(

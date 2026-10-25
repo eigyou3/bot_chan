@@ -1,7 +1,8 @@
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 
 // キャラアイコンを横4つずつ並べた画像を作る
-const W = 92, H = 112, GAP = 8, PER = 4;
+// Discordは横400pxくらいに縮めて表示するので、大きめに作って右を空けとく（くっきり＆小さめに見える）
+const W = 150, H = 182, GAP = 12, PER = 4, CW = 900;
 
 async function img(url) {
   try {
@@ -18,8 +19,10 @@ async function charRow(list) {
   const n = list.length;
   const cols = Math.min(PER, n);
   const rows = Math.ceil(n / PER);
-  const cv = createCanvas(cols * W + (cols - 1) * GAP, rows * H + (rows - 1) * GAP);
+  const cv = createCanvas(CW, rows * H + (rows - 1) * GAP);
   const ctx = cv.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
   list.forEach((c, i) => {
     const x = (i % PER) * (W + GAP);
@@ -28,18 +31,18 @@ async function charRow(list) {
     // 下地
     ctx.fillStyle = '#3a3c43';
     ctx.beginPath();
-    ctx.roundRect(x, y, W, H, 10);
+    ctx.roundRect(x, y, W, H, 16);
     ctx.fill();
 
     const im = ims[i];
-    if (im) ctx.drawImage(im, x + 6, y + 4, W - 12, W - 12);
+    if (im) ctx.drawImage(im, x + 8, y + 6, W - 16, W - 16);
 
     ctx.fillStyle = '#e8e8e8';
-    ctx.font = '14px "NotoSansJP-Black"';
+    ctx.font = '24px "NotoSansJP-Black"';
     ctx.textAlign = 'center';
     // 凸が分かる人だけ C◯ を付ける
     const t = (c.lv ? `Lv.${c.lv}` : '') + (c.c != null ? `  C${c.c}` : '');
-    ctx.fillText(t, x + W / 2, y + H - 9);
+    ctx.fillText(t, x + W / 2, y + H - 14);
   });
 
   return cv.toBuffer('image/png');
