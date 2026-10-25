@@ -16,7 +16,7 @@ module.exports = {
 
     // 聖遺物自慢のメニュー
     if (interaction.isStringSelectMenu()) {
-      const run = interaction.customId.startsWith('art_c_') ? art.pickChar : interaction.customId.startsWith('art_p_') ? art.pickPart : null;
+      const run = { art_c: art.pickChar, art_b: art.pickBase, art_p: art.pickPart }[interaction.customId.slice(0, 5)];
       if (run) return run(interaction).catch(e => console.error('聖遺物エラー:', e.message));
       return;
     }

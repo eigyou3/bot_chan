@@ -51,51 +51,68 @@ function rank(v, part) {
 const relics = a => (a.equipList || []).filter(e => e.reliquary && PARTS[e.flat?.equipType])
   .sort((x, y) => ORDER.indexOf(x.flat.equipType) - ORDER.indexOf(y.flat.equipType));
 
-const say = (i, t) => i.editReply({ content: t, components: [] });
+const COLOR = '#BA7517';
+const box = t => new EmbedBuilder().setColor(COLOR).setDescription(t);
+// 本人だけのメニュー（中身もEmbed）
+const ask = (t, menu) => ({ embeds: [box(t)], components: [new ActionRowBuilder().addComponents(menu)] });
+// みんなに見える返事
+async function pub(i, t) {
+  await i.followUp({ embeds: [box(t)] }).catch(() => null);
+  return i.deleteReply().catch(() => null);
+}
 
 // /artifact → キャラ選択
-async function start(i, base, uidIn) {
-  await i.deferReply({ ephemeral: true });
-  const saved = st.get(i.guildId).intro?.[i.user.id]?.uid;
-  const uid = uidIn ? en.cleanUid(uidIn) : saved;
-  if (!uid) return say(i, uidIn ? 'UIDの形が正しくないみたい。' : 'UIDが未登録だよ。`uid` に入れるか、先に自己紹介からUIDを登録してね。');
+async function start(i) {
+  const uid = st.get(i.guildId).intro?.[i.user.id]?.uid;
+  // 他人の聖遺物は出さない＝登録済みのUIDだけ
+  if (!uid) return i.reply({ embeds: [box(`<@${i.user.id}> さん、UIDが登録されてないよ！\n先に自己紹介をしてね！`)] });
 
+  await i.deferReply({ ephemeral: true });
   const { p, raw, err } = await en.player(uid);
-  if (!p) return say(i, err === 404 ? 'そのUIDのプレイヤーが見つからなかったよ。' : '今うまく取れなかったよ。少し待ってからもう一度お願いします。');
-  if (!raw?.length) return say(i, 'キャラの詳細が見られなかったよ。ゲームのプロフィールで「キャラ詳細を表示」をオンにしてね。');
+  if (!p) return pub(i, err === 404 ? '登録されてるUIDのプレイヤーが見つからなかったよ。自己紹介からUIDを登録し直してね。' : '今うまく取れなかったよ。少し待ってからもう一度お願いします。');
+  if (!raw?.length) return pub(i, `<@${i.user.id}> さん、キャラの詳細が見られなかったよ。\nゲームのプロフィールで「キャラ詳細を表示」をオンにしてね。`);
 
   const nm = await en.names();
   const opts = raw.filter(a => relics(a).length).slice(0, 25).map(a => ({ label: nm[String(a.avatarId)] || `キャラ ${a.avatarId}`, value: String(a.avatarId) }));
-  if (!opts.length) return say(i, '聖遺物を付けてる展示キャラがいなかったよ。');
+  if (!opts.length) return pub(i, `<@${i.user.id}> さん、聖遺物を付けてる展示キャラがいなかったよ。`);
 
-  const menu = new StringSelectMenuBuilder().setCustomId(`art_c_${uid}_${base}`).setPlaceholder('キャラを選ぶ').addOptions(opts);
-  return i.editReply({ content: `どのキャラの聖遺物を自慢する？（${BASES[base].nm}基準）`, components: [new ActionRowBuilder().addComponents(menu)] });
+  const menu = new StringSelectMenuBuilder().setCustomId(`art_c_${uid}`).setPlaceholder('キャラを選ぶ').addOptions(opts);
+  return i.editReply(ask('どのキャラの聖遺物を自慢する？', menu));
 }
 
-// キャラ選択 → 部位選択
+// キャラ選択 → 計算基準
 async function pickChar(i) {
-  const [, , uid, base] = i.customId.split('_');
+  const uid = i.customId.split('_')[2];
   const aid = i.values[0];
+  const opts = Object.entries(BASES).map(([k, b]) => ({ label: b.nm, value: k }));
+  const menu = new StringSelectMenuBuilder().setCustomId(`art_b_${uid}_${aid}`).setPlaceholder('計算基準を選ぶ').addOptions(opts);
+  return i.update(ask('計算基準は？', menu));
+}
+
+// 計算基準 → 部位選択
+async function pickBase(i) {
+  const [, , uid, aid] = i.customId.split('_');
+  const base = i.values[0];
   const { raw } = await en.player(uid);
   const a = raw?.find(x => String(x.avatarId) === aid);
-  if (!a) return i.update({ content: 'データが取れなかったよ。もう一度 /artifact からお願いします。', components: [] });
+  if (!a) return i.update({ embeds: [box('データが取れなかったよ。もう一度 /artifact からお願いします。')], components: [] });
 
   const opts = relics(a).map(e => {
     const m = e.flat.reliquaryMainstat;
     return { label: `${PARTS[e.flat.equipType]}　${stat(m.mainPropId, m.statValue)}`, description: `スコア ${score(e, base).toFixed(1)}`, value: e.flat.equipType };
   });
-  const menu = new StringSelectMenuBuilder().setCustomId(`art_p_${uid}_${base}_${aid}`).setPlaceholder('部位を選ぶ').addOptions(opts);
-  return i.update({ content: 'どの部位を自慢する？', components: [new ActionRowBuilder().addComponents(menu)] });
+  const menu = new StringSelectMenuBuilder().setCustomId(`art_p_${uid}_${aid}_${base}`).setPlaceholder('部位を選ぶ').addOptions(opts);
+  return i.update(ask(`どの部位を自慢する？（${BASES[base].nm}基準）`, menu));
 }
 
 // 部位選択 → カード投稿
 async function pickPart(i) {
-  const [, , uid, base, aid] = i.customId.split('_');
+  const [, , uid, aid, base] = i.customId.split('_');
   await i.deferUpdate();
   const { p, raw } = await en.player(uid);
   const a = raw?.find(x => String(x.avatarId) === aid);
   const e = a && relics(a).find(x => x.flat.equipType === i.values[0]);
-  if (!e) return i.editReply({ content: 'データが取れなかったよ。もう一度 /artifact からお願いします。', components: [] });
+  if (!e) return i.editReply({ embeds: [box('データが取れなかったよ。もう一度 /artifact からお願いします。')], components: [] });
 
   const nm = await en.names();
   const f = e.flat;
@@ -119,4 +136,4 @@ async function pickPart(i) {
   return i.deleteReply().catch(() => null);
 }
 
-module.exports = { BASES, start, pickChar, pickPart, score, rank };
+module.exports = { BASES, start, pickChar, pickBase, pickPart, score, rank };
