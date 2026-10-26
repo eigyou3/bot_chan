@@ -3,6 +3,7 @@ const st = require('../utils/store');
 const { annRows } = require('../utils/annRows');
 const intro = require('../utils/intro');
 const gift = require('../utils/gift');
+const dict = require('../utils/dict');
 const wel = require('../utils/welcome');
 const { parseVisitorMessage } = require('../utils/imageGenerator');
 
@@ -22,6 +23,12 @@ module.exports = {
     }
 
     if (message.author.bot) return;
+
+    // --- 0. 住宅用語辞典（会社のサーバーでbotにメンション）---
+    if (message.guildId === WEL_GUILD && new RegExp(`<@!?${client.user.id}>`).test(message.content)) {
+      await dict.onMention(message, client).catch(e => console.error('辞典エラー:', e.message));
+      return;
+    }
 
     // --- 1. 来場予約の処理 ---
     // 時間と様/さんが入ってたら反応（全角もOK）
