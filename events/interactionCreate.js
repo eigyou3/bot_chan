@@ -6,6 +6,7 @@ const art = require('../utils/artifact');
 const gift = require('../utils/gift');
 const chr = require('../utils/character');
 const dict = require('../utils/dict');
+const off = require('../utils/off');
 
 module.exports = {
   name: 'interactionCreate',
@@ -21,6 +22,7 @@ module.exports = {
     if (interaction.isStringSelectMenu()) {
       const run = { art_c: art.pickChar, art_b: art.pickBase, art_p: art.pickPart, chr_c: chr.pickChar, chr_o: chr.pickOp, chr_b: chr.pickBase }[interaction.customId.slice(0, 5)];
       if (interaction.customId.startsWith('dic_')) return dict.pick(interaction).catch(e => console.error('辞典エラー:', e.message));
+      if (interaction.customId.startsWith('off_')) return off.pick(interaction).catch(e => console.error('解除エラー:', e.message));
       if (run) return run(interaction).catch(e => console.error('聖遺物エラー:', e.message));
       return;
     }
