@@ -58,6 +58,13 @@ module.exports = {
         const b = await fetch(a.url).then(r => r.arrayBuffer()).catch(() => null);
         if (b) files.push(new AttachmentBuilder(Buffer.from(b), { name: a.name }));
       }
+      // Embedに入れた画像は添付に出てこないことがあるので、そっちからも拾う
+      const iu = old?.embeds[0]?.image?.url;
+      if (!files.length && iu) {
+        const b = await fetch(iu).then(r => r.arrayBuffer()).catch(() => null);
+        const nm = (iu.split('?')[0].split('/').pop() || 'ann.png').replace(/[^\w.\-]/g, '') || 'ann.png';
+        if (b) files.push(new AttachmentBuilder(Buffer.from(b), { name: nm }));
+      }
       if (old) await old.delete().catch(() => null);
 
       // 元メッセージが見つからない時(再起動直後とか)はtextから作り直す

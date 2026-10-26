@@ -7,6 +7,7 @@ const gift = require('../utils/gift');
 const chr = require('../utils/character');
 const dict = require('../utils/dict');
 const off = require('../utils/off');
+const gn = require('../utils/gnews');
 
 module.exports = {
   name: 'interactionCreate',
@@ -17,6 +18,9 @@ module.exports = {
       try { await command.execute(interaction, client); } catch (error) { console.error(error); }
       return;
     }
+
+    // お知らせのロール選択
+    if (interaction.isRoleSelectMenu() && interaction.customId === 'gn_role') return gn.pick(interaction).catch(e => console.error('お知らせ設定エラー:', e.message));
 
     // 聖遺物自慢のメニュー
     if (interaction.isStringSelectMenu()) {
@@ -32,6 +36,7 @@ module.exports = {
       if (interaction.customId.startsWith('intro_open_')) return intro.open(interaction).catch(e => console.error(e));
       if (interaction.customId === 'gift_open') return gift.open(interaction).catch(e => console.error(e));
       if (interaction.customId === 'chr_end') return chr.end(interaction).catch(() => null);
+      if (interaction.customId === 'gn_none') return gn.pick(interaction).catch(e => console.error('お知らせ設定エラー:', e.message));
       // 押すたびに付く/外れる
       if (interaction.customId.startsWith('ann_tg_')) {
         const id = interaction.customId.slice(7);

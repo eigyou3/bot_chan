@@ -2,6 +2,7 @@ const { REST, Routes } = require('discord.js');
 const st = require('../utils/store');
 const wel = require('../utils/welcome');
 const vr = require('../utils/vcrank');
+const gn = require('../utils/gnews');
 
 module.exports = {
   name: 'clientReady',
@@ -27,6 +28,10 @@ module.exports = {
     // 各サーバーの #bot-config から設定を戻す
     await st.loadAll(client);
     await vr.init(client).catch(e => console.error('VC集計の初期化エラー:', e.message));
+
+    // 原神のお知らせ 1時間おき（起動1分後に1回）
+    setTimeout(() => gn.tick(client).catch(() => null), 60000);
+    setInterval(() => gn.tick(client).catch(() => null), 3600000);
 
     // アラーム 1分ごとチェック
     let prev = '';
