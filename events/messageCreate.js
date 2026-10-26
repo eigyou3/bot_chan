@@ -4,6 +4,7 @@ const { annRows } = require('../utils/annRows');
 const intro = require('../utils/intro');
 const gift = require('../utils/gift');
 const dict = require('../utils/dict');
+const bump = require('../utils/bump');
 const wel = require('../utils/welcome');
 const { parseVisitorMessage } = require('../utils/imageGenerator');
 
@@ -13,6 +14,11 @@ const WEL_GUILD = '1496054346385723472';
 module.exports = {
   name: 'messageCreate',
   async execute(message, client) {
+    // DISBOARDのbump（botの発言なので先に見る）
+    if (message.guild && message.author.id === '302050872383242240') {
+      await bump.on(message).catch(e => console.error('bumpエラー:', e.message));
+    }
+
     // UID登録の案内を一番下に（自分の投稿は無視）
     if (message.guild && message.author.id !== client.user.id && st.get(message.guildId).introP?.ch === message.channelId) {
       intro.bump(message.channel).catch(() => null);

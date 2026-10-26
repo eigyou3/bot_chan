@@ -3,6 +3,7 @@ const st = require('../utils/store');
 const wel = require('../utils/welcome');
 const vr = require('../utils/vcrank');
 const gn = require('../utils/gnews');
+const bump = require('../utils/bump');
 
 module.exports = {
   name: 'clientReady',
@@ -43,6 +44,7 @@ module.exports = {
       // 来客リマインド
       await wel.tick(client, now).catch(e => console.error('リマインド処理エラー:', e.message));
       await vr.tick(client).catch(e => console.error('VC集計エラー:', e.message));
+      await bump.tick(client).catch(e => console.error('bumpエラー:', e.message));
 
       for (const d of st.db.values()) {
         for (const a of d.alarms) {
