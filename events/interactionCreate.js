@@ -1,4 +1,4 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AttachmentBuilder } = require('discord.js');
 const st = require('../utils/store');
 const { annRows } = require('../utils/annRows');
 const intro = require('../utils/intro');
@@ -117,14 +117,28 @@ module.exports = {
       if (interaction.customId.startsWith('ann_mdl_')) {
         const pend = client.commands.get('announce').pend;
         const p = pend.get(interaction.customId.slice(8));
-        if (!p) return interaction.reply({ content: '時間が経ちすぎたので、もう一度 /announce からお願いします。', ephemeral: true });
+        const box = t => ({ embeds: [new EmbedBuilder().setColor('#5865F2').setDescription(t)], ephemeral: true });
+        if (!p) return interaction.reply(box('時間が経ちすぎたので、もう一度 /announce からお願いします。'));
         pend.delete(interaction.customId.slice(8));
+        await interaction.deferReply({ ephemeral: true });
 
         const text = interaction.fields.getTextInputValue('announce_text');
         const embed = new EmbedBuilder().setColor('#5865F2').setDescription(text);
 
-        await interaction.reply({ content: '送信しました。', ephemeral: true });
-        const msg = await interaction.channel.send({ embeds: [embed], components: annRows(interaction.guild, p.ids) });
+        // 画像があれば落として付け直す（CDNのURLは期限切れになるので）
+        const files = [];
+        const up = interaction.fields.getUploadedFiles('announce_img')?.first();
+        if (up && /^image\//.test(up.contentType || '')) {
+          const b = await fetch(up.url).then(r => r.arrayBuffer()).catch(() => null);
+          if (b) {
+            const nm = `ann.${(up.name.split('.').pop() || 'png').toLowerCase()}`;
+            files.push(new AttachmentBuilder(Buffer.from(b), { name: nm }));
+            embed.setImage(`attachment://${nm}`);
+          }
+        }
+
+        const msg = await interaction.channel.send({ embeds: [embed], components: annRows(interaction.guild, p.ids), files });
+        await interaction.editReply(box(up && !files.length ? '送信したよ（画像は読み込めなかったので外したよ）' : '送信したよ'));
 
         if (p.sticky) {
           st.get(interaction.guildId).sticky[interaction.channelId] = { messageId: msg.id, text, roles: p.ids };

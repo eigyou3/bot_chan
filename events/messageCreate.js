@@ -1,4 +1,4 @@
-const { EmbedBuilder, MessageFlags } = require('discord.js');
+const { EmbedBuilder, MessageFlags, AttachmentBuilder } = require('discord.js');
 const st = require('../utils/store');
 const { annRows } = require('../utils/annRows');
 const intro = require('../utils/intro');
@@ -51,10 +51,17 @@ module.exports = {
 
     try {
       const old = await message.channel.messages.fetch(sk.messageId).catch(() => null);
+
+      // 画像は消す前に落としておく
+      const files = [];
+      for (const a of old?.attachments.values() || []) {
+        const b = await fetch(a.url).then(r => r.arrayBuffer()).catch(() => null);
+        if (b) files.push(new AttachmentBuilder(Buffer.from(b), { name: a.name }));
+      }
       if (old) await old.delete().catch(() => null);
 
       // 元メッセージが見つからない時(再起動直後とか)はtextから作り直す
-      let emb = old?.embeds;
+      let emb = old?.embeds.map(e => files[0] ? EmbedBuilder.from(e).setImage(`attachment://${files[0].name}`) : e);
       let cmp = old?.components;
       if (!old) {
         emb = [new EmbedBuilder().setColor('#5865F2').setDescription(sk.text)];
@@ -64,7 +71,7 @@ module.exports = {
       }
 
       // 貼り直しは通知なし
-      const nw = await message.channel.send({ embeds: emb, components: cmp, flags: MessageFlags.SuppressNotifications });
+      const nw = await message.channel.send({ embeds: emb, components: cmp, files, flags: MessageFlags.SuppressNotifications });
       sk.messageId = nw.id;
       st.saveLater(message.guild);
     } catch (e) {

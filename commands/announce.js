@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, LabelBuilder, FileUploadBuilder } = require('discord.js');
 const { isAdmin, deny } = require('../utils/perm');
 
 // モーダル送信まで選んだロールを覚えとく
@@ -32,13 +32,13 @@ module.exports = {
       .setCustomId(`ann_mdl_${interaction.id}`)
       .setTitle('アナウンス内容の入力');
 
-    const txt = new TextInputBuilder()
-      .setCustomId('announce_text')
-      .setLabel('案内文章（ここで普通に改行できます）')
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(true);
+    // 文章と画像（画像はなくてもOK）
+    const txt = new LabelBuilder().setLabel('案内文章（ここで普通に改行できます）')
+      .setTextInputComponent(new TextInputBuilder().setCustomId('announce_text').setStyle(TextInputStyle.Paragraph).setRequired(true));
+    const img = new LabelBuilder().setLabel('画像（なくてもOK）')
+      .setFileUploadComponent(new FileUploadBuilder().setCustomId('announce_img').setRequired(false).setMaxValues(1));
 
-    modal.addComponents(new ActionRowBuilder().addComponents(txt));
+    modal.addLabelComponents(txt, img);
     return interaction.showModal(modal);
   },
 };
