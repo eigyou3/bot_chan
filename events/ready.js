@@ -17,7 +17,7 @@ module.exports = {
     try {
       await rest.put(Routes.applicationCommands(client.user.id), { body: all.filter(c => !c.guild).map(c => c.data.toJSON()) });
       const gs = {};
-      for (const c of all.filter(c => c.guild)) (gs[c.guild] ||= []).push(c.data.toJSON());
+      for (const c of all.filter(c => c.guild)) for (const id of [].concat(c.guild)) (gs[id] ||= []).push(c.data.toJSON());
       for (const [gid, body] of Object.entries(gs)) {
         await rest.put(Routes.applicationGuildCommands(client.user.id, gid), { body }).catch(e => console.error(`コマンド登録エラー(${gid}):`, e.message));
       }

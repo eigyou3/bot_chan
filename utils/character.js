@@ -5,7 +5,6 @@ const en = require('./enka');
 const art = require('./artifact');
 const { charCard, EL } = require('./charCard');
 
-const INTRO_CH = '1510962713612914698';
 const COLOR = '#8A8A8A';
 const box = (t, c = COLOR) => new EmbedBuilder().setColor(c).setDescription(t);
 const who = i => `<@${i.user.id}> が \`/character\` を実行`;
@@ -133,7 +132,10 @@ async function pub(i, t) {
 // /character
 async function start(i) {
   const uid = st.get(i.guildId).intro?.[i.user.id]?.uid;
-  if (!uid) return i.reply({ embeds: [box(`${who(i)}\n\nUIDが登録されてないよ！\n先に <#${INTRO_CH}> で自己紹介をしてね！`)] });
+  if (!uid) {
+    const ic = st.get(i.guildId).introP?.ch;
+    return i.reply({ embeds: [box(`${who(i)}\n\nUIDが登録されてないよ！\n先に${ic ? ` <#${ic}> で` : ''}UID登録をしてね！`)] });
+  }
 
   await i.deferReply({ ephemeral: true });
   const { p, raw, err } = await en.player(uid);

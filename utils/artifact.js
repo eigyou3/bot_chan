@@ -52,7 +52,6 @@ const relics = a => (a.equipList || []).filter(e => e.reliquary && PARTS[e.flat?
   .sort((x, y) => ORDER.indexOf(x.flat.equipType) - ORDER.indexOf(y.flat.equipType));
 
 const COLOR = '#BA7517';
-const INTRO_CH = '1510962713612914698';
 // 誰が実行したか先頭に出す
 const who = i => `<@${i.user.id}> が \`/artifact\` を実行`;
 const box = t => new EmbedBuilder().setColor(COLOR).setDescription(t);
@@ -68,7 +67,10 @@ async function pub(i, t) {
 async function start(i) {
   const uid = st.get(i.guildId).intro?.[i.user.id]?.uid;
   // 他人の聖遺物は出さない＝登録済みのUIDだけ
-  if (!uid) return i.reply({ embeds: [box(`${who(i)}\n\nUIDが登録されてないよ！\n先に <#${INTRO_CH}> で自己紹介をしてね！`)] });
+  if (!uid) {
+    const ic = st.get(i.guildId).introP?.ch;
+    return i.reply({ embeds: [box(`${who(i)}\n\nUIDが登録されてないよ！\n先に${ic ? ` <#${ic}> で` : ''}UID登録をしてね！`)] });
+  }
 
   await i.deferReply({ ephemeral: true });
   const { p, raw, err } = await en.player(uid);

@@ -2,18 +2,17 @@ const { SlashCommandBuilder } = require('discord.js');
 const { isAdmin, deny } = require('../utils/perm');
 const { place } = require('../utils/intro');
 
-// このサーバー専用
-const GUILD = '1386706264578461726';
+const { GI } = require('../utils/gi');
 
 module.exports = {
-  guild: GUILD,
+  guild: GI,
   data: new SlashCommandBuilder()
     .setName('intro')
     .setDescription('UID登録（自己紹介）の案内をこのチャンネルに置きます')
     .addRoleOption(o => o.setName('role').setDescription('登録した人に付けるロール').setRequired(true)),
 
   async execute(interaction) {
-    if (interaction.guildId !== GUILD) {
+    if (!GI.includes(interaction.guildId)) {
       return interaction.reply({ content: '❌ このサーバーではこのコマンドを使用できません。', ephemeral: true });
     }
     if (!isAdmin(interaction)) return deny(interaction);
