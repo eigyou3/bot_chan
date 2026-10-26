@@ -4,7 +4,7 @@ const { isAdmin, deny } = require('./perm');
 
 // 原神のゲーム内お知らせ
 const URL = 'https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=ja&bundle_id=hk4e_global&platform=pc&region=os_asia&level=55&uid=100000000';
-const COLOR = '#C9A55C';
+const COLOR = '#5F5E5A';
 
 const box = t => new EmbedBuilder().setColor(COLOR).setDescription(t);
 
@@ -141,6 +141,7 @@ async function run(g, list) {
   for (const [id, p] of Object.entries(n.posts)) {
     if (p.e > now) continue;
     await ch.messages.delete(p.msg).catch(() => null);
+    if (p.ping) await ch.messages.delete(p.ping).catch(() => null);
     delete n.posts[id];
     dirty = true;
   }
@@ -149,14 +150,14 @@ async function run(g, list) {
     const fresh = list.filter(it => !n.seen.includes(it.ann_id)).map(parse).filter(a => a && a.e > now)
       .sort((x, y) => (x.s || 0) - (y.s || 0));
     for (const [k, a] of fresh.entries()) {
-      // 連続した時はメンションは最後だけ
-      const last = k === fresh.length - 1 && n.role;
-      const m = await ch.send({
-        content: last ? `<@&${n.role}>` : undefined,
-        embeds: [embed(a)],
-        allowedMentions: { roles: last ? [n.role] : [] },
-      }).catch(e => { console.error('お知らせ投稿失敗:', e.message); return null; });
-      if (m) n.posts[a.id] = { msg: m.id, e: a.e };
+      const m = await ch.send({ embeds: [embed(a)] }).catch(e => { console.error('お知らせ投稿失敗:', e.message); return null; });
+      if (!m) continue;
+      n.posts[a.id] = { msg: m.id, e: a.e };
+      // 連続した時はメンションは最後の後だけ、別の投稿で
+      if (k === fresh.length - 1 && n.role) {
+        const pg = await ch.send({ content: `<@&${n.role}>`, allowedMentions: { roles: [n.role] } }).catch(() => null);
+        if (pg) n.posts[a.id].ping = pg.id;
+      }
     }
     // 見たものは全部覚える（今のお知らせに無いのは忘れる）
     const ids = list.map(it => it.ann_id);
