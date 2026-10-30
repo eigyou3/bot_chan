@@ -5,6 +5,7 @@ const vr = require('../utils/vcrank');
 const gn = require('../utils/gnews');
 const bump = require('../utils/bump');
 const alarm = require('../utils/alarm');
+const inactive = require('../utils/inactive');
 const { syncAll } = require('../utils/registerCommands');
 
 module.exports = {
@@ -23,6 +24,8 @@ module.exports = {
     }
 
     await vr.init(client).catch(e => console.error('VC集計の初期化エラー:', e.message));
+    await inactive.tick(client);
+    setInterval(() => inactive.tick(client), 5 * 60000);
 
     // 原神のお知らせ 1時間おき（起動1分後に1回）
     setTimeout(() => gn.tick(client).catch(() => null), 60000);
