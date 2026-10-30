@@ -63,7 +63,7 @@ async function submit(i) {
   const uid = en.cleanUid(i.fields.getTextInputValue('uid'));
   if (!uid) return oops(i, errMsg[400]);
 
-  const { p, av, err } = await en.player(uid);
+  const { p, av, raw, err } = await en.player(uid);
   // UIDの打ち間違いだけはやり直してもらう
   if (!p && (err === 400 || err === 404)) return oops(i, errMsg[err]);
 
@@ -99,9 +99,10 @@ async function submit(i) {
       .setDescription(`## ${i.member.displayName}`);
   }
 
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setLabel('詳しいビルドを見る').setStyle(ButtonStyle.Link).setURL(`https://enka.network/u/${uid}/`)
-  );
+  const components = raw?.length ? [new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setLabel('Enka').setStyle(ButtonStyle.Link).setURL(`https://enka.network/u/${uid}/`),
+    new ButtonBuilder().setLabel('アーカーシャ').setStyle(ButtonStyle.Link).setURL(`https://akasha.cv/profile/${uid}`)
+  )] : [];
 
   // 前のカードがあれば差し替え
   const d = st.get(i.guildId);
@@ -111,7 +112,7 @@ async function submit(i) {
     const ch = await i.client.channels.fetch(old.ch).catch(() => null);
     if (ch) await ch.messages.delete(old.msg).catch(() => null);
   }
-  const m = await i.channel.send({ content: `<@${i.user.id}> がUIDを登録しました`, allowedMentions: { parse: [] }, embeds: [e], components: [row], files });
+  const m = await i.channel.send({ content: `<@${i.user.id}> がUIDを登録しました`, allowedMentions: { parse: [] }, embeds: [e], components, files });
   d.intro[i.user.id] = { ch: i.channelId, msg: m.id, uid };
   st.saveLater(i.guild, 3000);
 

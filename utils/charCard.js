@@ -22,7 +22,7 @@ const EL = {
   Rock: ['#C9931A', '#FAF2DF', '岩元素'],
 };
 
-const W = 960, H = 1720;
+const W = 960, H = 1760;
 const INK = '#2B2B2B', SUB = '#8A8A8A', LINE = '#EFEFEF';
 
 const font = (f, s) => `${s}px "${f}"`;
@@ -163,16 +163,21 @@ async function charCard(d) {
     ctx.fillText(ct, 58 + lw + 30, 80);
   }
 
-  // 天賦アイコン（通常攻撃・元素スキル・元素爆発）。白いアイコンが読める下地。
+  // 天賦の透明な形だけを元素色で描く。四角い背景は付けない。
   let tx = 58;
   ['通常', 'スキル', '爆発'].forEach((label, i) => {
-    ctx.fillStyle = 'rgba(43,43,43,0.78)';
-    rr(ctx, tx, 101, 48, 48, 12);
-    ctx.fill();
-    if (talents[i]) ctx.drawImage(talents[i], tx + 3, 104, 42, 42);
+    if (talents[i]) {
+      const icon = createCanvas(42, 42);
+      const ic = icon.getContext('2d');
+      ic.drawImage(talents[i], 0, 0, 42, 42);
+      ic.globalCompositeOperation = 'source-in';
+      ic.fillStyle = ac;
+      ic.fillRect(0, 0, 42, 42);
+      ctx.drawImage(icon, tx + 3, 104);
+    }
     else {
       ctx.font = font('ZenMaruB', 14);
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = ac;
       ctx.textAlign = 'center';
       ctx.fillText(label, tx + 24, 131);
       ctx.textAlign = 'left';
@@ -248,7 +253,6 @@ async function charCard(d) {
   ctx.font = font('ZenMaru', 24);
   ctx.fillStyle = INK;
   ctx.textAlign = 'left';
-  ctx.fillText(setTxt, 64 + 92, y + 24);
   if (d.showScore ?? d.showOp) {
     // 合計スコアだけ色付き
     ctx.font = font('ZenMaruB', 30);
@@ -260,7 +264,12 @@ async function charCard(d) {
     ctx.fillStyle = SUB;
     ctx.fillText(`${d.base}基準`, W - 64 - tw - 14, y + 24);
   }
-  y += 44;
+  // セット名はスコアと別の行にし、2セットずつでも重ねず全部表示する。
+  ctx.font = font('ZenMaru', 24);
+  ctx.fillStyle = INK;
+  ctx.textAlign = 'left';
+  ctx.fillText(setTxt, 64, y + 58, W - 128);
+  y += 78;
 
   const TW = (W - 128 - 4 * 12) / 5, TH = 320;
   d.relics.forEach((r, i) => {

@@ -6,6 +6,7 @@ const UI = 'https://enka.network/ui/';
 
 let nm = null, nmAt = 0;
 let chr = {}, pfp = {}, ja = {};
+let relicSets = {}, relicItems = {};
 const cache = new Map();  // uid -> { at, ttl, p, av, raw }
 
 // キャラ名・アイコン・プロフィールアイコンのデータ（1日キャッシュ）
@@ -14,7 +15,9 @@ async function names() {
   try {
     // 古いstoreは新キャラ・新武器が抜けてるので gi/ と合わせる（セット名は古い方にしか無い）
     const get = f => fetch(RAW + f).then(r => r.json()).catch(() => ({}));
-    const [c0, c1, l0, l1, pf] = await Promise.all(['characters.json', 'gi/avatars.json', 'loc.json', 'gi/locs.json', 'pfps.json'].map(get));
+    const [c0, c1, l0, l1, pf, relicData] = await Promise.all(['characters.json', 'gi/avatars.json', 'loc.json', 'gi/locs.json', 'pfps.json', 'gi/relics.json'].map(get));
+    relicSets = relicData.Sets || {};
+    relicItems = relicData.Items || {};
     ja = { ...(l0.ja || {}), ...(l1.ja || {}) };
     const c = { ...c0 };
     const cut = s => (s || '').replace(/^\/ui\//, '').replace(/\.png$/, '');
@@ -88,5 +91,11 @@ const loc = k => ja[String(k)] || '';
 
 // キャラのデータ（元素・天賦の並びなど）
 const char = id => chr[String(id)] || null;
+function relicSet(e) {
+  const iconId = e.flat?.icon?.match(/UI_RelicIcon_(\d+)_/)?.[1];
+  const setId = relicItems[String(e.itemId)]?.SetId || iconId;
+  const hash = e.flat?.setNameTextMapHash || relicSets[setId]?.Name;
+  return { id: String(setId || hash || e.itemId), name: loc(hash) || loc(relicSets[setId]?.Name) || `セット ${setId || hash || '不明'}` };
+}
 
-module.exports = { names, cleanUid, player, charIcon, pfpIcon, loc, char, UI };
+module.exports = { names, cleanUid, player, charIcon, pfpIcon, loc, char, relicSet, UI };

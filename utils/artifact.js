@@ -15,6 +15,24 @@ const BASES = {
   atker: { nm: '攻撃+チャージ', f: s => (s.ATK_P + s.ATK / 9 + s.ER * 0.9) * 1.453 },
   defer: { nm: '防御+チャージ', f: s => (s.DEF_P * 0.8 + s.DEF / 10.7 + s.ER * 0.9) * 1.453 },
 };
+// 表示式と色付けは実際の計算で使用する項目に合わせる（数値はサブOP）。
+const FORMULAS = {
+  atk: '攻撃力% + 攻撃力実数 / 9 + 会心率 × 2 + 会心ダメージ',
+  hp: 'HP% + HP実数 / 138.25 + 会心率 × 2 + 会心ダメージ',
+  def: '防御力% × 0.8 + 防御力実数 / 10.7 + 会心率 × 2 + 会心ダメージ',
+  em: '会心率 × 2 + 会心ダメージ + 元素熟知 × 0.335',
+  hpo: 'HP% × 1.68 + HP実数 / 82.29',
+  atko: '攻撃力% × 1.68 + 攻撃力実数 / 5.357',
+  defo: '防御力% × 1.344 + 防御力実数 / 6.37',
+  hper: '(HP% + HP実数 / 138.25 + 元素チャージ効率 × 0.9) × 1.453',
+  atker: '(攻撃力% + 攻撃力実数 / 9 + 元素チャージ効率 × 0.9) × 1.453',
+  defer: '(防御力% × 0.8 + 防御力実数 / 10.7 + 元素チャージ効率 × 0.9) × 1.453',
+};
+const HIGHLIGHTS = {
+  atk: ['攻撃力'], hp: ['HP'], def: ['防御力'], em: ['元素熟知'],
+  hpo: ['HP'], atko: ['攻撃力'], defo: ['防御力'],
+  hper: ['HP', '元素チャージ効率'], atker: ['攻撃力', '元素チャージ効率'], defer: ['防御力', '元素チャージ効率'],
+};
 
 const KEY = {
   FIGHT_PROP_HP: 'HP', FIGHT_PROP_HP_PERCENT: 'HP_P',
@@ -141,4 +159,4 @@ async function pickPart(i) {
   return i.deleteReply().catch(() => null);
 }
 
-module.exports = { BASES, PARTS, ORDER, start, pickChar, pickBase, pickPart, score, rank, relics };
+module.exports = { BASES, FORMULAS, HIGHLIGHTS, PARTS, ORDER, start, pickChar, pickBase, pickPart, score, rank, relics };

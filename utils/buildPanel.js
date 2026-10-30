@@ -14,7 +14,7 @@ const author = s => ({ name: `${s.name} さんのビルドカード`, iconURL: s
 const owner = s => `<@${s.user}> がビルドカードを作成`;
 
 function panel() {
-  return { embeds: [box('## ビルドカード作成\n登録したUIDから、展示キャラクターのビルドカードを作成できます。\n作成方法を選んでね！')], components: [row(button('bc_open_score', 'スコア付きで作成', ButtonStyle.Primary), button('bc_open_plain', 'スコアなしで作成'))] };
+  return { embeds: [box('## ビルドカード作成\n登録したUIDから、展示キャラクターのビルドカードを作成できます。\n作成方法を選んでね！')], components: [row(button('bc_open_score', '作成:スコア表示ON', ButtonStyle.Primary), button('bc_open_plain', '作成:スコア表示OFF'))] };
 }
 
 // チャンネルごとに1枚。再投稿中の重複を防ぎ、生成カードの後にも移動する。
@@ -46,7 +46,12 @@ function controls(s) {
   const rows = [row(menu)];
   if (s.score) rows.push(row(new StringSelectMenuBuilder().setCustomId(`bc_base_${s.id}`).setPlaceholder('計算基準を選択').addOptions(Object.entries(art.BASES).map(([value, b]) => ({ label: b.nm, value, default: value === s.base })))));
   rows.push(row(button(`bc_on_${s.id}`, 'スコア表示ON', s.score ? ButtonStyle.Primary : ButtonStyle.Secondary), button(`bc_off_${s.id}`, 'スコア表示OFF', s.score ? ButtonStyle.Secondary : ButtonStyle.Primary), button(`bc_end_${s.id}`, '終了')));
+  if (s.score && s.aid && !s.list.find(a => String(a.avatarId) === s.aid)?.lim) rows.push(links(s.uid));
   return rows;
+}
+
+function links(uid) {
+  return row(new ButtonBuilder().setLabel('Enka').setStyle(ButtonStyle.Link).setURL(`https://enka.network/u/${uid}/`), new ButtonBuilder().setLabel('アーカーシャ').setStyle(ButtonStyle.Link).setURL(`https://akasha.cv/profile/${uid}`));
 }
 
 async function refresh(i, s) {
@@ -54,13 +59,13 @@ async function refresh(i, s) {
   if (!a || (s.score && !s.base)) {
     s.buf = null;
     s.embed = null;
-    return i.editReply({ content: owner(s), allowedMentions: { parse: [] }, embeds: [box('キャラクターを選んでね！\nスコア付きの場合は、計算基準も選択できます。\nスコアOFFでは、聖遺物のOPも非表示になります。\n\n作成後もキャラクターや計算基準を変更して、何度でも作り直せます。').setAuthor(author(s))], attachments: [], components: controls(s) });
+    return i.editReply({ content: owner(s), allowedMentions: { parse: [] }, embeds: [box('キャラクターを選択してください。\nスコア表示ONの場合は、計算基準も選択してください。\nスコア表示OFFでは、聖遺物のOPも非表示になります。').setAuthor(author(s))], attachments: [], components: controls(s) });
   }
   const d = await require('./character').build(a, s.uid, s.base, s.score);
   s.buf = await require('./charCard').charCard(d);
-  s.caption = `## ${d.name}のビルドカード\n${s.score && !a.lim ? `計算基準：${art.BASES[s.base].nm}` : 'スコア・聖遺物OP：非表示'}${a.lim ? '\nキャラ詳細が非公開のため、わかる範囲で作ったよ。' : ''}`;
+  s.caption = `## ${d.name}のビルドカード\n${s.score && !a.lim ? `計算基準：${art.BASES[s.base].nm}\n\`${art.FORMULAS[s.base]}\`\n※聖遺物のサブOPで計算` : 'スコア・聖遺物OP：非表示'}${a.lim ? '\nキャラ詳細が非公開のため、わかる範囲で作ったよ。' : ''}`;
   s.embed = box(s.caption).setAuthor(author(s)).setImage('attachment://build-card.png');
-  return i.editReply({ content: owner(s), allowedMentions: { parse: [] }, embeds: [box(s.caption + '\n\nキャラクターや計算基準を変えて、何度でも作り直せるよ！').setAuthor(author(s)).setImage('attachment://build-card.png')], attachments: [], files: [new AttachmentBuilder(s.buf, { name: 'build-card.png' })], components: controls(s) });
+  return i.editReply({ content: owner(s), allowedMentions: { parse: [] }, embeds: [s.embed], attachments: [], files: [new AttachmentBuilder(s.buf, { name: 'build-card.png' })], components: controls(s) });
 }
 
 async function handle(i) {
@@ -90,7 +95,7 @@ async function handle(i) {
   try {
     await i.deferUpdate();
     s.at = Date.now();
-    if (action === 'end') { sessions.delete(id); return i.editReply({ components: [], ...(s.embed ? { embeds: [s.embed] } : {}) }); }
+    if (action === 'end') { sessions.delete(id); return i.editReply({ components: s.embed && s.score && !s.list.find(a => String(a.avatarId) === s.aid)?.lim ? [links(s.uid)] : [], ...(s.embed ? { embeds: [s.embed] } : {}) }); }
     if (action === 'char' && s.list.some(a => String(a.avatarId) === i.values[0])) s.aid = i.values[0];
     if (action === 'base' && art.BASES[i.values[0]]) s.base = i.values[0];
     if (action === 'toggle') s.score = !s.score;

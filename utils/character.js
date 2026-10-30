@@ -65,6 +65,7 @@ async function build(a, uid, base, showOp) {
     ['元素チャージ効率', p1(fp[23] || 0)],
     [dmg[0], p1(dmg[1])],
   ];
+  if (showOp) for (const entry of stats) if (art.HIGHLIGHTS[base]?.includes(entry[0])) entry[2] = 1;
 
   const we = (a.equipList || []).find(e => e.weapon);
   const ws = we?.flat?.weaponStats?.[1];
@@ -77,9 +78,14 @@ async function build(a, uid, base, showOp) {
   } : { name: '-', lv: '-', r: 1, sub: '' };
 
   const rs = art.relics(a);
-  const cnt = {};
-  rs.forEach(e => { const k = en.loc(e.flat.setNameTextMapHash); cnt[k] = (cnt[k] || 0) + 1; });
-  const sets = Object.entries(cnt).filter(([, v]) => v >= 2).sort((x, y) => y[1] - x[1]);
+  const cnt = new Map();
+  rs.forEach(e => {
+    const set = en.relicSet(e);
+    const entry = cnt.get(set.id) || { name: set.name, count: 0 };
+    entry.count++;
+    cnt.set(set.id, entry);
+  });
+  const sets = [...cnt.values()].filter(s => s.count >= 2).sort((a, b) => b.count - a.count).map(s => [s.name, s.count]);
 
   // 部位ごと（無い部位は空）
   const relics = art.ORDER.map(t => {
