@@ -11,7 +11,7 @@ function fixture() {
   const logs = [], warnings = [], kicks = [];
   const started = Date.parse('2026-06-30T12:00:00Z');
   const channel = { permissionsFor: () => ({ has: () => true }), send: async p => logs.push(p) };
-  const guild = { id: 'inactivity-test', name: 'テストサーバー', ownerId: 'owner', channels: { cache: new Collection([['log', channel]]) } };
+  const guild = { id: 'inactivity-test', name: 'テストサーバー', ownerId: 'owner', roles: { fetch: async id => ({ id, editable: true, managed: false }) }, channels: { cache: new Collection([['log', channel]]) } };
   const member = { id: 'member', guild, user: { id: 'member', bot: false }, joinedTimestamp: started - DAY, voice: {}, kickable: true, permissions: { has: () => false }, roles: { cache: new Collection() }, send: async p => warnings.push(p), kick: async reason => kicks.push(reason) };
   const members = new Collection([[member.id, member]]);
   guild.members = { me: { permissions: { has: () => true } }, fetch: async options => options ? member : members };
@@ -24,6 +24,66 @@ function click(f, action, token, user = 'member') {
   const client = { guilds: { cache: new Collection([[f.guild.id, f.guild]]) } };
   return { i, run: () => inactive.handleButton(i, client) };
 }
+
+function withRole(f, held = true) {
+  f.s.role = 'participant'; f.adds = []; f.removes = [];
+  if (held) f.member.roles.cache.set('participant', {});
+  f.member.roles.add = async role => { f.adds.push(role.id); f.member.roles.cache.set(role.id, {}); };
+  f.member.roles.remove = async role => { assert.ok(f.warnings.length); f.removes.push(role.id); f.member.roles.cache.delete(role.id); };
+  return f;
+}
+
+test('warning removes specified role only after successful DM; keep grants it regardless of original ownership', async () => {
+  const save = st.save, clock = Date.now; st.save = async () => true; Date.now = () => NOW;
+  try {
+    for (const held of [true, false]) {
+      st.db.clear(); const f = withRole(fixture(), held);
+      await inactive.sweep(f.guild, NOW);
+      assert.equal(f.removes.length, held ? 1 : 0);
+      assert.match(f.warnings[0].embeds[0].toJSON().fields[0].value, /元々持っていなくても/);
+      const keep = click(f, 'keep', f.s.users.member.warningToken); await keep.run();
+      assert.deepEqual(f.adds, ['participant']); assert.equal(f.member.roles.cache.has('participant'), true);
+      assert.equal(f.s.users.member.warningAt, undefined); assert.equal(f.s.users.member.suspendedRole, undefined);
+      assert.equal(f.kicks.length, 0); assert.match(keep.i.result.content, /指定ロールを付与/);
+    }
+  } finally { st.save = save; Date.now = clock; st.db.clear(); }
+});
+
+test('blocked DM or failed pre-removal persistence never strips role', async () => {
+  const save = st.save, clock = Date.now; st.save = async () => true; Date.now = () => NOW;
+  try {
+    let f = withRole(fixture()); f.member.send = async () => { throw new Error('blocked'); };
+    await inactive.sweep(f.guild, NOW); assert.equal(f.removes.length, 0); assert.equal(f.kicks.length, 0);
+    st.db.clear(); f = withRole(fixture()); let writes = 0;
+    st.save = async () => ++writes === 1;
+    await inactive.sweep(f.guild, NOW); assert.equal(f.removes.length, 0); assert.equal(f.s.enabled, false);
+  } finally { st.save = save; Date.now = clock; st.db.clear(); }
+});
+
+test('role grant failure cancels kick and keeps recovery pending; disabling restores suspended role', async () => {
+  const save = st.save, clock = Date.now; st.save = async () => true; Date.now = () => NOW;
+  let f = withRole(fixture(), false);
+  try {
+    await inactive.sweep(f.guild, NOW);
+    f.member.roles.add = async () => { throw new Error('Missing Permissions'); };
+    const keep = click(f, 'keep', f.s.users.member.warningToken); await keep.run();
+    assert.equal(f.s.users.member.restoreRole, 'participant'); assert.equal(f.s.users.member.warningAt, undefined);
+    assert.match(keep.i.result.content, /付与できません/); assert.equal(f.kicks.length, 0);
+    st.db.clear(); f = withRole(fixture()); await inactive.sweep(f.guild, NOW);
+    let output;
+    await command.execute({ user: { id: '1088369918069715024' }, guildId: f.guild.id, guild: f.guild, options: { getSubcommand: () => 'disable' }, deferReply: async () => {}, editReply: async p => { output = p; } });
+    assert.equal(f.s.enabled, false); assert.deepEqual(f.adds, ['participant']); assert.match(output, /停止しました/);
+  } finally { st.save = save; Date.now = clock; st.db.clear(); }
+});
+
+test('role-only settings do not reset the observation period', async () => {
+  const save = st.save; st.save = async () => true;
+  const f = fixture(), since = f.s.since;
+  try {
+    await command.execute({ user: { id: '1088369918069715024' }, guildId: f.guild.id, guild: f.guild, options: { getSubcommand: () => 'role', getRole: () => ({ id: 'new-role' }) }, deferReply: async () => {}, editReply: async () => {} });
+    assert.equal(f.s.role, 'new-role'); assert.equal(f.s.since, since);
+  } finally { st.save = save; st.db.clear(); }
+});
 
 test('keep button survives restart, resets three months and cannot be replayed', async () => {
   const save = st.save, clock = Date.now; st.save = async () => true; Date.now = () => NOW;
@@ -131,7 +191,7 @@ test('DM failure never authorizes a kick', async () => {
     assert.equal(s.users.member.warningAt, undefined); assert.ok(s.users.member.dmFailedAt);
     s.seenAt = NOW + 8 * DAY; Date.now = () => s.seenAt;
     await inactive.sweep(guild, s.seenAt);
-    assert.equal(kicks.length, 0); assert.match(logs[0].embeds[0].toJSON().description, /キックしません/);
+    assert.equal(kicks.length, 0); assert.match(logs[0].embeds[0].toJSON().description, /キックは行いません/);
   } finally { st.save = save; Date.now = clock; st.db.clear(); }
 });
 
