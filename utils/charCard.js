@@ -88,7 +88,8 @@ async function img(url) {
 // d: { name, el, lv, cons, tal:[A,E,Q], art, stats:[[名,値,強調?]], wp:{name,icon,lv,r,sub}, sets:[[名,数]], relics:[{icon,main,subs:[],score,best}], total, base, showOp, uid }
 async function charCard(d) {
   const [ac, tint, elName] = EL[d.el] || ['#888888', '#F2F2F2', ''];
-  const [art, wpi, ...ris] = await Promise.all([img(d.art), img(d.wp?.icon), ...d.relics.map(r => img(r.icon))]);
+  const [primaryArt, wpi, ...ris] = await Promise.all([img(d.art), img(d.wp?.icon), ...d.relics.map(r => img(r.icon))]);
+  const art = primaryArt || (d.artFallback ? await img(d.artFallback) : null);
   const talents = await Promise.all((d.talIcons || []).map(img));
 
   const cv = createCanvas(W, H);
