@@ -6,7 +6,14 @@ const { isAdmin, deny } = require('./perm');
 const DIS = '302050872383242240';
 const WAIT = 2 * 60 * 60;  // 2時間
 const COLOR = '#5F5E5A';
-const busy = new Set();
+const queues = new Map(), movers = new Map();
+function serial(id, run) {
+  const next = (queues.get(id) || Promise.resolve()).catch(() => null).then(run);
+  queues.set(id, next);
+  const clear = () => { if (queues.get(id) === next) queues.delete(id); };
+  next.then(clear, clear);
+  return next;
+}
 
 const box = t => new EmbedBuilder().setColor(COLOR).setDescription(t);
 
@@ -20,10 +27,10 @@ function isBump(m) {
 const who = m => m.interactionMetadata?.user?.id || m.interaction?.user?.id || null;
 
 // 既存の案内を編集する。消えている場合だけ通知音なしで投稿する。
-async function put(ch, b, opt, notify = false) {
+async function put(ch, b, opt, notify = false, move = false) {
   const payload = { content: notify ? '@here' : '', ...opt, allowedMentions: { parse: notify ? ['everyone'] : [] } };
   const old = b.msg && await ch.messages.fetch(b.msg).catch(() => null);
-  if (!notify && old && await old.edit(payload).catch(() => null)) return true;
+  if (!notify && !move && old && await old.edit(payload).catch(() => null)) return true;
   // メッセージ編集ではメンション通知されないため、ONの場合だけ新規投稿。
   const m = await ch.send({ ...payload, ...(!notify ? { flags: MessageFlags.SuppressNotifications } : {}) }).catch(e => { console.error('bump投稿失敗:', e.message); return null; });
   if (!m) return false;
@@ -37,21 +44,48 @@ function countMsg(at, uid) {
   return { embeds: [box(`${uid ? `<@${uid}> がbumpしてくれたよ！\n` : ''}次にbumpできるのは <t:${n}:R>（<t:${n}:t>）`)], allowedMentions: { parse: [] } };
 }
 
+function current(b) {
+  if (b.at && Date.now() / 1000 < Math.floor(b.at / 1000) + WAIT) return countMsg(b.at, b.by);
+  return { embeds: [box(b.at ? 'bumpできるよ！ DISBOARDの `/bump` を実行してね' : 'まだbumpの記録がないよ。DISBOARDの `/bump` を実行してね')] };
+}
+
+async function place(ch) {
+  return serial(ch.guildId, async () => {
+    const b = st.get(ch.guildId).bump;
+    if (!b || b.ch !== ch.id) return;
+    // 貼り直しでは期限・通知済みフラグを変えず、メンションも送らない。
+    if (await put(ch, b, current(b), false, true)) st.saveLater(ch.guild, 3000);
+  });
+}
+
+function schedule(ch) {
+  clearTimeout(movers.get(ch.id));
+  const timer = setTimeout(() => {
+    movers.delete(ch.id);
+    place(ch).catch(e => console.error('bump常駐エラー:', e.message));
+  }, 1000);
+  timer.unref?.(); movers.set(ch.id, timer);
+}
+
 // bumpされた時
 async function on(m) {
+  return serial(m.guildId, async () => {
   const d = st.get(m.guildId);
   const b = d.bump;
   if (!b?.ch || b.ch !== m.channelId || !isBump(m)) return;
   b.at = m.createdTimestamp;
   b.rem = false;
-  await put(m.channel, b, countMsg(b.at, who(m)));
+  b.by = who(m);
+  await put(m.channel, b, countMsg(b.at, b.by), false, true);
   await st.save(m.guild);
+  });
 }
 
 // /setbump
 async function set(i) {
   if (!isAdmin(i)) return deny(i);
   await i.deferReply({ ephemeral: true });
+  return serial(i.guildId, async () => {
   const d = st.get(i.guildId);
   const here = i.options?.getBoolean('here') ?? d.bump?.here ?? false;
   if (here && !i.channel.permissionsFor(i.guild.members.me)?.has(PermissionFlagsBits.MentionEveryone)) {
@@ -62,7 +96,7 @@ async function set(i) {
     await i.guild.channels.cache.get(d.bump.ch)?.messages.delete(d.bump.msg).catch(() => null);
   }
   const previous = d.bump;
-  const b = d.bump = { ch: i.channelId, msg: previous?.ch === i.channelId ? previous.msg : null, at: previous?.ch === i.channelId ? previous.at : null, rem: false, here };
+  const b = d.bump = { ch: i.channelId, msg: previous?.ch === i.channelId ? previous.msg : null, at: previous?.ch === i.channelId ? previous.at : null, by: previous?.ch === i.channelId ? previous.by : null, rem: false, here };
 
   // 最後のbumpを履歴から探す
   const ms = await i.channel.messages.fetch({ limit: 100 }).catch(() => null);
@@ -70,21 +104,23 @@ async function set(i) {
 
   if (last) {
     b.at = last.createdTimestamp;
+    b.by = who(last);
     if (Date.now() / 1000 >= Math.floor(b.at / 1000) + WAIT) {
       b.rem = true;
-      await put(i.channel, b, { embeds: [box('bumpできるよ！ `/bump` してね')] });
+      await put(i.channel, b, { embeds: [box('bumpできるよ！ `/bump` してね')] }, false, true);
     } else {
-      await put(i.channel, b, countMsg(b.at, who(last)));
+      await put(i.channel, b, countMsg(b.at, who(last)), false, true);
     }
   } else if (b.at && Date.now() / 1000 < Math.floor(b.at / 1000) + WAIT) {
-    await put(i.channel, b, countMsg(b.at, null));
+    await put(i.channel, b, countMsg(b.at, b.by), false, true);
   } else {
     b.rem = true;
-    await put(i.channel, b, { embeds: [box('まだbumpの記録がないよ。`/bump` してね')] });
+    await put(i.channel, b, { embeds: [box('まだbumpの記録がないよ。`/bump` してね')] }, false, true);
   }
 
   if (!await st.save(i.guild)) return i.editReply(`⚠️ bumpの設定を保存できませんでした。${st.warn(i.guild)}\n/setup で保存先を確認してから再設定してください。`);
-  return require('./feedback').done(i, { embeds: [box(`✅ このチャンネルでbumpの案内を表示するよ。\n@here通知：${here ? 'ON' : 'OFF（静かに更新）'}${st.warn(i.guild)}`)] });
+  return require('./feedback').done(i, { embeds: [box(`✅ このチャンネルの一番下にbumpの案内を常駐するよ。\n@here通知：${here ? 'ON（時間になったときだけ）' : 'OFF'}${st.warn(i.guild)}`)] });
+  });
 }
 
 // 毎分：時間になったらリマインド
@@ -92,16 +128,16 @@ async function tick(client) {
   const now = Date.now() / 1000;
   for (const g of client.guilds.cache.values()) {
     const b = st.get(g.id).bump;
-    if (!b?.ch || !b.at || b.rem || busy.has(g.id)) continue;
+    if (!b?.ch || !b.at || b.rem) continue;
     if (now < Math.floor(b.at / 1000) + WAIT) continue;
     const ch = g.channels.cache.get(b.ch);
     if (!ch) continue;
-    busy.add(g.id);
-    try {
+    await serial(g.id, async () => {
+      if (st.get(g.id).bump !== b || b.rem || now < Math.floor(b.at / 1000) + WAIT) return;
       b.rem = await put(ch, b, { embeds: [box('bumpできるよ！ DISBOARDの `/bump` を実行してね')] }, b.here === true);
       await st.save(g);
-    } finally { busy.delete(g.id); }
+    });
   }
 }
 
-module.exports = { set, on, tick, isBump };
+module.exports = { set, on, tick, isBump, place, schedule };

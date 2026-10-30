@@ -35,6 +35,10 @@ module.exports = {
       await buildPanel.place(message.channel).catch(e => console.error('ビルド案内エラー:', e.message));
     }
 
+    if (message.guild && message.author.id !== client.user.id && st.get(message.guildId).bump?.ch === message.channelId && !bump.isBump(message)) {
+      bump.schedule(message.channel);
+    }
+
     if (message.author.bot) return;
 
     // --- 0. 住宅用語辞典（会社のサーバーでbotにメンション）---

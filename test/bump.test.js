@@ -5,6 +5,32 @@ const st = require('../utils/store');
 const bump = require('../utils/bump');
 const command = require('../commands/setbump');
 
+test('sticky reposts at bottom without repeating here or resetting cooldown, even when reminder races', async () => {
+  const save = st.save, later = st.saveLater; st.save = async () => true; st.saveLater = () => {};
+  const sends = [], deletes = [];
+  const g = { id: 'sticky-test', channels: { cache: new Collection() } };
+  const ch = { id: 'ch', guildId: g.id, guild: g, messages: { fetch: async id => ({ delete: async () => deletes.push(id), edit: async () => ({}) }) }, send: async p => { sends.push(p); return { id: 'post-' + sends.length }; } };
+  g.channels.cache.set(ch.id, ch);
+  const client = { guilds: { cache: new Collection([[g.id, g]]) } };
+  const at = Date.now() - 7201000;
+  st.get(g.id).bump = { ch: ch.id, msg: 'old', at, rem: false, here: true, by: '12345' };
+  try {
+    await Promise.all([bump.place(ch), bump.tick(client), bump.place(ch)]);
+    await bump.tick(client);
+    const b = st.get(g.id).bump;
+    assert.equal(sends.length, 3); assert.equal(deletes.length, 3);
+    assert.equal(sends.filter(p => p.content === '@here').length, 1);
+    for (const p of sends.filter(p => p.content !== '@here')) {
+      assert.deepEqual(p.allowedMentions.parse, []); assert.ok(p.flags);
+    }
+    assert.equal(b.at, at); assert.equal(b.rem, true); assert.equal(b.here, true); assert.equal(b.msg, 'post-3');
+    b.at = Date.now(); b.rem = false;
+    await bump.place(ch);
+    assert.match(sends.at(-1).embeds[0].toJSON().description, /<@12345>/);
+    assert.match(sends.at(-1).embeds[0].toJSON().description, /次にbump/);
+  } finally { st.save = save; st.saveLater = later; st.db.clear(); }
+});
+
 test('setbump is global, saves here flag, and preserves timer when history is absent', async () => {
   assert.equal(command.guild, undefined); assert.equal(command.genshin, undefined);
   assert.equal(command.data.toJSON().options[0].name, 'here');
