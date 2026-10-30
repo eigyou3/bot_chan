@@ -1,8 +1,28 @@
-const { EmbedBuilder, PermissionFlagsBits: P } = require('discord.js');
+const { EmbedBuilder, PermissionFlagsBits: P, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { randomBytes } = require('crypto');
 const st = require('./store');
 const { isOwner } = require('./perm');
 const DAY = 86400000, GRACE = 7 * DAY;
 const running = new Set(), flush = new Map();
+const buttonLocks = new Set();
+const locked = (gid, uid) => buttonLocks.has(`${gid}:${uid}`);
+function clearWarning(u) {
+  for (const key of ['warningAt', 'warningToken', 'warningJoinedAt', 'confirmToken', 'confirmUntil', 'dmFailedAt']) delete u[key];
+}
+
+function buttons(gid, uid, token, confirm = false) {
+  const button = (action, label, style) => new ButtonBuilder().setCustomId(`ia_${action}_${gid}_${uid}_${token}`).setLabel(label).setStyle(style);
+  return [new ActionRowBuilder().addComponents(...(confirm ? [
+    button('confirm', '退出を確定する', ButtonStyle.Danger), button('back', '戻る', ButtonStyle.Secondary),
+  ] : [button('keep', '参加を続ける', ButtonStyle.Success), button('leave', '退出する', ButtonStyle.Secondary)]))];
+}
+
+function warning(guild, member, u) {
+  return {
+    embeds: [new EmbedBuilder().setColor('#BA7517').setTitle(`${guild.name}：参加意思の確認`).setDescription(`3か月間、発言・VC参加を確認できていません。\n**参加を続ける**：キック予定を解除し、押した日から3か月を数え直します。\n**退出する**：確認画面を出し、確定後にキックします。\n発言・VC参加でもキック予定は解除されます。\n操作も活動もない場合、<t:${Math.floor((u.warningAt + GRACE) / 1000)}:F>以降にキックします。\nボタンの選択結果はサーバーの管理者用ログに記録されます。\nBotが閲覧できない場所での活動は確認できません。`)],
+    components: buttons(guild.id, member.id, u.warningToken), allowedMentions: { parse: [] },
+  };
+}
 
 // 月末は移動先の月末に丸める。日時は日本時間で扱う。
 function threeMonths(at) {
@@ -19,7 +39,7 @@ function record(guild, user, at = Date.now()) {
   if (!s?.enabled || user.bot) return;
   const u = s.users[user.id] ||= {};
   u.at = Math.max(u.at || 0, at);
-  delete u.warningAt; delete u.dmFailedAt;
+  clearWarning(u);
   if (!flush.has(guild.id)) {
     const t = setTimeout(() => { flush.delete(guild.id); st.save(guild); }, 60000);
     t.unref?.(); flush.set(guild.id, t);
@@ -55,7 +75,7 @@ async function sweep(guild, now = Date.now()) {
     // 記録していない時間を「活動なし」とみなさない。
     if (now - s.seenAt > 15 * 60000) {
       s.since = now;
-      for (const u of Object.values(s.users)) { delete u.warningAt; delete u.dmFailedAt; }
+      for (const u of Object.values(s.users)) clearWarning(u);
       await log(guild, s, 'Botが15分以上活動を確認できなかったため、判定期間を今日から3か月にリセットしました。');
     }
     s.seenAt = now;
@@ -68,38 +88,42 @@ async function sweep(guild, now = Date.now()) {
     for (const m of members.values()) if (!m.user.bot && m.voice?.channelId) record(guild, m.user, now);
     for (const m of members.values()) {
       if (!s.enabled) break;
+      if (locked(guild.id, m.id)) continue;
       if (!eligible(m, s, now)) {
-        if (s.users[m.id]) delete s.users[m.id].warningAt;
+        if (s.users[m.id]) clearWarning(s.users[m.id]);
         continue;
       }
       const u = s.users[m.id] ||= {};
-      if (!u.warningAt) {
+      if (!u.warningAt || !u.warningToken) {
         if (u.dmFailedAt && now - u.dmFailedAt < DAY) continue;
         const observed = u.at || 0;
+        const token = randomBytes(8).toString('hex');
+        u.warningAt = now; u.warningToken = token; u.warningJoinedAt = m.joinedTimestamp;
         try {
-          await m.send({ embeds: [new EmbedBuilder().setColor('#BA7517').setTitle(`${guild.name}：非アクティブによる退出予告`).setDescription(`3か月間、発言・VC参加を確認できていません。\n<t:${Math.floor((now + GRACE) / 1000)}:F>以降にキックの対象になります。\nそれまでにサーバーで発言するか、VCに参加すると解除されます。\nBotが閲覧できない場所での活動は確認できません。事情がある場合はサーバー管理者にご連絡ください。`)], allowedMentions: { parse: [] } });
+          await m.send(warning(guild, m, u));
         } catch {
+          clearWarning(u);
           u.dmFailedAt = now;
           await log(guild, s, `<@${m.id}>：警告DMを送信できないため、キックしません。管理者による確認が必要です。`);
           if (!await persist(guild, s)) return;
           continue;
         }
         // DM送信待ちの間に活動した場合は警告状態を付けない。
-        if ((u.at || 0) !== observed) continue;
+        if ((u.at || 0) !== observed || u.warningToken !== token) continue;
         u.warningAt = now; delete u.dmFailedAt;
         if (!await persist(guild, s)) return;
-        await log(guild, s, `<@${m.id}> に警告DMを送りました。7日間活動がなければキックします。`);
+        await log(guild, s, `<@${m.id}> に参加意思確認のDMを送りました。7日間、操作も活動もなければキックします。`);
         continue;
       }
       if (now < u.warningAt + GRACE) continue;
       // 直前の再取得後も、除外・参加日・VC・最新の発言時刻を再判定する。
       const fresh = await guild.members.fetch({ user: m.id, force: true }).catch(() => null);
-      if (!fresh || !s.enabled || !u.warningAt || !eligible(fresh, s, Date.now())) continue;
+      if (!fresh || !s.enabled || locked(guild.id, m.id) || !u.warningAt || !eligible(fresh, s, Date.now())) continue;
       if (!await persist(guild, s)) return;
-      if (!s.enabled || !u.warningAt || !eligible(fresh, s, Date.now())) continue;
+      if (!s.enabled || locked(guild.id, m.id) || !u.warningAt || !eligible(fresh, s, Date.now())) continue;
       await log(guild, s, `<@${m.id}>：3か月活動なし・警告後7日経過のためキックを実行します。`);
       // ログ送信待ち中の活動も確認する。
-      if (!s.enabled || !u.warningAt || !eligible(fresh, s, Date.now())) continue;
+      if (!s.enabled || locked(guild.id, m.id) || !u.warningAt || !eligible(fresh, s, Date.now())) continue;
       try {
         await fresh.kick('3か月発言・VC参加なし。警告DM送信後7日間活動なし。');
         delete s.users[m.id];
@@ -118,4 +142,61 @@ async function tick(client) {
     await sweep(g).catch(e => console.error(`非アクティブ管理エラー ${g.id}:`, e.message));
   }
 }
-module.exports = { threeMonths, record, eligible, sweep, tick };
+async function handleButton(i, client) {
+  const [, action, gid, uid, token] = i.customId.split('_');
+  if (i.user.id !== uid) return i.reply({ content: 'このボタンはDMを受け取った本人だけが操作できます。', ephemeral: true });
+  const guild = client.guilds.cache.get(gid);
+  const s = guild && st.get(gid).inactive;
+  const u = s?.users[uid];
+  if (s?.enabled && u?.warningAt && action === 'confirm' && u.confirmToken === token && Date.now() >= u.confirmUntil) {
+    delete u.confirmToken; delete u.confirmUntil;
+    return i.update({ content: '確認画面の有効期限が切れたため、参加意思の確認に戻りました。', ...warning(guild, { id: uid }, u) });
+  }
+  const valid = () => s?.enabled && st.get(gid).inactive === s && u?.warningAt && (
+    ['confirm', 'back'].includes(action) ? u.confirmToken === token && (action === 'back' || Date.now() < u.confirmUntil) : u.warningToken === token
+  );
+  const ended = text => ({ content: text, embeds: [], components: [], allowedMentions: { parse: [] } });
+  if (!valid() || !['keep', 'leave', 'confirm', 'back'].includes(action)) return i.update(ended('この案内は終了しています。すでに活動したか、設定が変更された可能性があります。'));
+  if (locked(gid, uid)) return i.deferUpdate();
+  buttonLocks.add(`${gid}:${uid}`);
+  try {
+    await i.deferUpdate();
+    const member = await guild.members.fetch({ user: uid, force: true }).catch(() => null);
+    if (!member || !valid() || (u.warningJoinedAt && member.joinedTimestamp !== u.warningJoinedAt)) return i.editReply(ended('この案内は現在の参加状態では利用できません。サーバー管理者へお問い合わせください。'));
+    if (action === 'keep') {
+      const at = Date.now();
+      record(guild, member.user, at);
+      u.choice = 'keep'; u.choiceAt = at;
+      if (!await persist(guild, s)) return i.editReply(ended('参加継続を受け付けましたが保存に失敗したため、自動キックを停止しました。サーバー管理者へお問い合わせください。'));
+      await log(guild, s, `<@${uid}> が「参加を続ける」を選択しました。キック予定を解除し、今日から3か月を数え直します。`).catch(e => console.error('参加意思ログ失敗:', e.message));
+      return i.editReply(ended(`「${guild.name}」への参加継続を受け付けました。キック予定は解除されました。今日から3か月を数え直します。`));
+    }
+    if (action === 'back') {
+      delete u.confirmToken; delete u.confirmUntil;
+      return i.editReply({ content: '', ...warning(guild, member, u) });
+    }
+    if (action === 'leave') {
+      u.confirmToken = randomBytes(8).toString('hex'); u.confirmUntil = Date.now() + 10 * 60000;
+      return i.editReply({ content: `「${guild.name}」から本当に退出しますか？\n「退出を確定する」を押すと、Botがあなたをサーバーからキックします。\n確認画面は10分間有効です。`, embeds: [], components: buttons(gid, uid, u.confirmToken, true), allowedMentions: { parse: [] } });
+    }
+    if (!eligible(member, s, Date.now())) return i.editReply(ended('現在はキック対象外です。退出する場合はDiscordの「サーバーから脱退」を使用してください。'));
+    await log(guild, s, `<@${uid}> が「退出を確定する」を選択しました。本人の希望による退出処理を行います。`);
+    if (!valid() || !eligible(member, s, Date.now())) return i.editReply(ended('参加状態が変わったため退出処理を中止しました。'));
+    // 保存成功後だけ実行する。途中で失敗した場合も古い警告を再利用しない。
+    record(guild, member.user);
+    u.choice = 'leave'; u.choiceAt = Date.now();
+    if (!await persist(guild, s)) return i.editReply(ended('保存に失敗したため退出処理を中止し、自動キックを停止しました。管理者へお問い合わせください。'));
+    if (!s.enabled || st.get(gid).inactive !== s) return i.editReply(ended('監視設定が変更されたため退出処理を中止しました。'));
+    try {
+      await member.kick('警告DMの参加意思確認で、本人が退出を二段階で確定');
+    } catch (e) {
+      await log(guild, s, `<@${uid}> の希望による退出に失敗しました：${e.message.slice(0, 200)}`).catch(() => null);
+      return i.editReply(ended('Botの権限などにより退出処理に失敗しました。Discordの「サーバーから脱退」を使用するか、管理者に連絡してください。'));
+    }
+    delete s.users[uid]; await persist(guild, s);
+    await log(guild, s, `<@${uid}> は参加意思確認で退出を確定したため、キックしました。`).catch(e => console.error('退出ログ失敗:', e.message));
+    return i.editReply(ended(`「${guild.name}」から退出しました。`));
+  } finally { buttonLocks.delete(`${gid}:${uid}`); }
+}
+
+module.exports = { threeMonths, record, eligible, sweep, tick, handleButton };

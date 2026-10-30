@@ -9,6 +9,7 @@ const { dismiss } = require('../utils/feedback');
 const dict = require('../utils/dict');
 const off = require('../utils/off');
 const gn = require('../utils/gnews');
+const inactive = require('../utils/inactive');
 
 module.exports = {
   name: 'interactionCreate',
@@ -20,6 +21,16 @@ module.exports = {
         return interaction.reply({ content: '⚠️ このBotは設定保存用の #bot-config が必要です。サーバー管理者が `/setup` を実行してください。原神サーバーとして登録する場合は `/setgenshin` でも準備できます。使い方は `/help`。', allowedMentions: { parse: [] } });
       }
       try { await command.execute(interaction, client); } catch (error) { console.error(error); }
+      return;
+    }
+
+    if (interaction.isButton() && interaction.customId?.startsWith('ia_')) {
+      try { await inactive.handleButton(interaction, client); } catch (e) {
+        console.error('参加意思確認エラー:', e);
+        const payload = { content: '処理できませんでした。サーバー管理者へお問い合わせください。', embeds: [], components: [] };
+        if (interaction.deferred || interaction.replied) await interaction.editReply(payload).catch(() => null);
+        else await interaction.reply({ ...payload, ephemeral: true }).catch(() => null);
+      }
       return;
     }
 

@@ -29,7 +29,7 @@ function generalGuide() {
     '`/setvc`：VC参加通知の送信先を設定',
     '`/vcrank on:True／False`：週間VCランキングのON／OFF',
     '`/setbump here:True／False`：bump案内を設定。@here通知のON／OFFを選べます（初回の省略時はOFF）。DISBOARD本体の `/bump` はDISBOARDアプリのコマンドを使用してください。',
-    '`/inactive enable log:ログ先 exclude:除外ロール`：発言・VC参加を記録し、3か月活動がなければ警告DM、さらに7日間活動がなければ自動キック。最初はOFFです。',
+    '`/inactive enable log:ログ先 exclude:除外ロール`：3か月活動がなければ参加意思確認DMを送信。「参加を続ける」で期間リセット、「退出する」は再確認後にキック。操作も活動もなければ7日後に自動キック。最初はOFFです。',
     '`/inactive check`：候補確認（キックしません）。`/inactive status`：設定確認。`/inactive disable`：停止。',
     '', '**Bot管理者本人専用**',
     '`/servers`：Botが参加している全サーバーの名前・IDを公開投稿',

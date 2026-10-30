@@ -19,6 +19,71 @@ function fixture() {
   return { guild, member, members, s, logs, warnings, kicks };
 }
 
+function click(f, action, token, user = 'member') {
+  const i = { customId: `ia_${action}_${f.guild.id}_member_${token}`, user: { id: user }, deferUpdate: async () => {}, editReply: async p => { i.result = p; }, update: async p => { i.result = p; }, reply: async p => { i.result = p; } };
+  const client = { guilds: { cache: new Collection([[f.guild.id, f.guild]]) } };
+  return { i, run: () => inactive.handleButton(i, client) };
+}
+
+test('keep button survives restart, resets three months and cannot be replayed', async () => {
+  const save = st.save, clock = Date.now; st.save = async () => true; Date.now = () => NOW;
+  const f = fixture();
+  try {
+    await inactive.sweep(f.guild, NOW);
+    assert.deepEqual(f.warnings[0].components[0].toJSON().components.map(b => b.label), ['参加を続ける', '退出する']);
+    const token = f.s.users.member.warningToken;
+    st.get(f.guild.id).inactive = JSON.parse(JSON.stringify(f.s));
+    const c = click(f, 'keep', token); await c.run();
+    const restored = st.get(f.guild.id).inactive;
+    assert.equal(restored.users.member.at, NOW); assert.equal(restored.users.member.warningAt, undefined);
+    assert.match(c.i.result.content, /キック予定は解除/); assert.equal(f.kicks.length, 0);
+    const old = click(f, 'keep', token); await old.run(); assert.match(old.i.result.content, /終了/);
+    assert.ok(f.logs.some(p => /参加を続ける/.test(p.embeds[0].toJSON().description)));
+    restored.seenAt = NOW + 8 * DAY;
+    await inactive.sweep(f.guild, restored.seenAt); assert.equal(f.kicks.length, 0);
+  } finally { st.save = save; Date.now = clock; st.db.clear(); }
+});
+
+test('leave requires separate confirmation token; back and wrong user never kick', async () => {
+  const save = st.save, clock = Date.now; st.save = async () => true; Date.now = () => NOW;
+  const f = fixture();
+  try {
+    await inactive.sweep(f.guild, NOW);
+    const token = f.s.users.member.warningToken;
+    const wrong = click(f, 'leave', token, 'someone-else'); await wrong.run(); assert.match(wrong.i.result.content, /本人だけ/);
+    const forged = click(f, 'confirm', token); await forged.run(); assert.equal(f.kicks.length, 0);
+    const leave = click(f, 'leave', token); await leave.run();
+    assert.equal(f.kicks.length, 0);
+    const confirmation = f.s.users.member.confirmToken;
+    assert.notEqual(confirmation, token);
+    const back = click(f, 'back', confirmation); await back.run();
+    assert.deepEqual(back.i.result.components[0].toJSON().components.map(b => b.label), ['参加を続ける', '退出する']);
+    await leave.run();
+    const confirm = click(f, 'confirm', f.s.users.member.confirmToken); await confirm.run();
+    assert.equal(f.kicks.length, 1); assert.match(confirm.i.result.content, /退出しました/);
+    await confirm.run(); assert.equal(f.kicks.length, 1);
+  } finally { st.save = save; Date.now = clock; st.db.clear(); }
+});
+
+test('expired confirmation restores choices, failed persistence never kicks, disabled monitor rejects old buttons', async () => {
+  const save = st.save, clock = Date.now; st.save = async () => true; Date.now = () => NOW;
+  const f = fixture();
+  try {
+    await inactive.sweep(f.guild, NOW);
+    const token = f.s.users.member.warningToken;
+    await click(f, 'leave', token).run();
+    const old = f.s.users.member.confirmToken;
+    Date.now = () => NOW + 11 * 60000;
+    const expired = click(f, 'confirm', old); await expired.run();
+    assert.match(expired.i.result.content, /有効期限/); assert.equal(f.kicks.length, 0);
+    await click(f, 'leave', token).run();
+    const confirm = click(f, 'confirm', f.s.users.member.confirmToken);
+    st.save = async () => false;
+    await confirm.run(); assert.equal(f.kicks.length, 0); assert.equal(f.s.enabled, false);
+    const keep = click(f, 'keep', token); await keep.run(); assert.match(keep.i.result.content, /終了/);
+  } finally { st.save = save; Date.now = clock; st.db.clear(); }
+});
+
 test('automation is opt-in, owner can enable with saved configuration and disable immediately', async () => {
   const save = st.save; st.save = async () => true;
   const { guild } = fixture();
@@ -114,7 +179,7 @@ test('activity or disabling during final fetch prevents kick; concurrent checks 
     };
     await inactive.sweep(f.guild, f.s.seenAt); assert.equal(f.kicks.length, 0);
     st.db.clear(); f = fixture();
-    f.s.users.member = { warningAt: NOW - 8 * DAY };
+    f.s.users.member = { warningAt: NOW - 8 * DAY, warningToken: 'test-token' };
     Date.now = () => NOW;
     f.guild.members.fetch = async options => { if (options) { f.s.enabled = false; return f.member; } return f.members; };
     await inactive.sweep(f.guild, NOW); assert.equal(f.kicks.length, 0);

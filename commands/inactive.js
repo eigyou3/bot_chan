@@ -4,7 +4,7 @@ const { isAdmin, deny } = require('../utils/perm');
 const { eligible } = require('../utils/inactive');
 
 module.exports = {
-  data: new SlashCommandBuilder().setName('inactive').setDescription('3か月活動なし→警告DM→7日後の自動キックを管理します').setContexts(InteractionContextType.Guild)
+  data: new SlashCommandBuilder().setName('inactive').setDescription('3か月活動なしの参加意思確認と自動キックを管理します').setContexts(InteractionContextType.Guild)
     .addSubcommand(c => c.setName('enable').setDescription('発言・VC参加の監視と警告つき自動キックを有効化')
       .addChannelOption(o => o.setName('log').setDescription('管理者が確認するログ送信先').addChannelTypes(ChannelType.GuildText).setRequired(true))
       .addRoleOption(o => o.setName('exclude').setDescription('キック対象から除外するロール')))
@@ -25,7 +25,7 @@ module.exports = {
       if (previous) previous.enabled = false;
       d.inactive = { enabled: true, since: now, seenAt: now, checkedAt: 0, log: ch.id, exclude: i.options.getRole('exclude')?.id || null, users: {} };
       if (!await st.save(i.guild)) { d.inactive = previous; if (previous) previous.enabled = wasEnabled; return i.editReply('⚠️ 設定を保存できなかったため、新しい設定は有効化していません。#bot-config を確認してください。'); }
-      return i.editReply({ embeds: [new EmbedBuilder().setColor('#BA7517').setTitle('非アクティブ管理を有効化しました').setDescription(`今日から記録を開始します。\n**3か月発言・VC参加なし → 警告DM → さらに7日間活動なしでキック**\n発言・VC参加があれば警告は解除されます。\nDMを送れない人はキックしません。\nBot・サーバー所有者・管理者・Bot管理者${d.inactive.exclude ? `・<@&${d.inactive.exclude}>` : ''}は対象外です。\nBotが閲覧できる場所の活動だけが記録対象です。\nBotが15分以上停止した場合、判定期間をリセットします。\nログ：<#${ch.id}>\n再度 enable を実行すると、全員の判定期間を今日から数え直します。`)], allowedMentions: { parse: [] } });
+      return i.editReply({ embeds: [new EmbedBuilder().setColor('#BA7517').setTitle('非アクティブ管理を有効化しました').setDescription(`今日から記録を開始します。\n**3か月発言・VC参加なし → 参加意思確認の警告DM**\n「参加を続ける」でキック予定を解除し、押した日から3か月を数え直します。\n「退出する」は再確認してからキックします。\n操作も活動もなければ、警告DMから7日後にキックします。\n発言・VC参加があれば警告は解除されます。\nDMを送れない人はキックしません。\nBot・サーバー所有者・管理者・Bot管理者${d.inactive.exclude ? `・<@&${d.inactive.exclude}>` : ''}は対象外です。\nBotが閲覧できる場所の活動だけが記録対象です。\nBotが15分以上停止した場合、判定期間をリセットします。\nログ：<#${ch.id}>\n再度 enable を実行すると、全員の判定期間を今日から数え直します。`)], allowedMentions: { parse: [] } });
     }
     const s = d.inactive;
     if (sub === 'disable') {
@@ -34,7 +34,7 @@ module.exports = {
       return i.editReply('非アクティブ管理を停止しました。自動キックは行いません。');
     }
     if (!s?.enabled) return i.editReply('非アクティブ管理はOFFです。`/inactive enable` で有効化できます。');
-    if (sub === 'status') return i.editReply({ embeds: [new EmbedBuilder().setColor('#BA7517').setTitle('非アクティブ管理：ON').setDescription(`判定開始：<t:${Math.floor(s.since / 1000)}:F>\n3か月活動なし＋警告後7日でキック\nログ：<#${s.log}>\n除外ロール：${s.exclude ? `<@&${s.exclude}>` : 'なし'}\n警告中：${Object.values(s.users).filter(u => u.warningAt).length}人\n停止：/inactive disable`)], allowedMentions: { parse: [] } });
+    if (sub === 'status') return i.editReply({ embeds: [new EmbedBuilder().setColor('#BA7517').setTitle('非アクティブ管理：ON').setDescription(`判定開始：<t:${Math.floor(s.since / 1000)}:F>\n3か月活動なしで参加意思確認DM。継続ボタンで期間リセット、未回答・活動なしなら警告後7日でキック。\nログ：<#${s.log}>\n除外ロール：${s.exclude ? `<@&${s.exclude}>` : 'なし'}\n警告中：${Object.values(s.users).filter(u => u.warningAt).length}人\n停止：/inactive disable`)], allowedMentions: { parse: [] } });
     const members = await i.guild.members.fetch();
     const ids = [...members.values()].filter(m => eligible(m, s, Date.now())).map(m => m.id);
     return i.editReply({ embeds: [new EmbedBuilder().setColor('#BA7517').setTitle(`非アクティブ候補：${ids.length}人`).setDescription(ids.length ? ids.slice(0, 80).map(id => `<@${id}>${s.users[id]?.warningAt ? '（警告済み）' : ''}`).join('\n') + (ids.length > 80 ? '\n※先頭80人を表示しています。' : '') : '現在、対象になる人はいません。').setFooter({ text: 'この確認コマンドではキックしません' })], allowedMentions: { parse: [] } });
