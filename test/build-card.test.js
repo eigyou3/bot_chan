@@ -104,7 +104,7 @@ test('public card identifies its owner and only that owner can change it', async
     assert.deepEqual(labels(), ['スコア表示ON', 'スコア表示OFF', '終了']);
     const other = { ...i, user: { id: 'other' } };
     await panel.handle(other); assert.match(i.error.content, /本人だけ/);
-    await select('end'); assert.equal(i.deleted, undefined); assert.deepEqual(i.output.components[0].toJSON().components.map(b => b.label), ['Enka', 'アーカーシャ']);
+    await select('end'); assert.equal(i.deleted, undefined); assert.deepEqual(i.output.components[0].toJSON().components.map(b => b.label), ['Enka', 'Akasha']);
     await select('char', '1'); assert.match(i.error.content, /有効期限/);
   } finally { Object.assign(en, { player: original.player, names: original.names }); character.build = original.build; cards.charCard = original.card; st.saveLater = original.saveLater; st.db.clear(); }
 });

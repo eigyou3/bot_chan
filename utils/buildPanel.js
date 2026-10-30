@@ -51,7 +51,7 @@ function controls(s) {
 }
 
 function links(uid) {
-  return row(new ButtonBuilder().setLabel('Enka').setStyle(ButtonStyle.Link).setURL(`https://enka.network/u/${uid}/`), new ButtonBuilder().setLabel('アーカーシャ').setStyle(ButtonStyle.Link).setURL(`https://akasha.cv/profile/${uid}`));
+  return row(new ButtonBuilder().setLabel('Enka').setStyle(ButtonStyle.Link).setURL(`https://enka.network/u/${uid}/`), new ButtonBuilder().setLabel('Akasha').setStyle(ButtonStyle.Link).setURL(`https://akasha.cv/profile/${uid}`));
 }
 
 async function refresh(i, s) {
