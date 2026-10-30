@@ -28,7 +28,10 @@ async function build(a, uid, base, showOp) {
 
   const side = (c.SideIconName || '').replace('UI_AvatarIcon_Side_', '');
   const cos = a.costumeId && c.Costumes?.[String(a.costumeId)];
-  const artUrl = cos?.art ? `${en.UI}${cos.art}.png` : side ? `${en.UI}UI_Gacha_AvatarImg_${side}.png` : null;
+  const doll = en.doll(a.avatarId);
+  const artUrl = cos?.art ? en.uiPath(cos.art) : side ? en.uiPath(`UI_Gacha_AvatarImg_${side}`) : null;
+  // The dressable Mannequin has no guaranteed static splash art.
+  const artFallback = doll ? en.charIcon(a) : null;
   // 新形式は /ui/xxx.png、旧形式は xxx。天賦Lvと同じSkillOrderで並べる。
   const talIcons = (c.SkillOrder || []).slice(0, 3).map(id => {
     const icon = c.Skills?.[id];
@@ -40,7 +43,7 @@ async function build(a, uid, base, showOp) {
   if (a.lim) {
     return {
       name: nm[String(a.avatarId)] || '？', el, lv: a.level ?? '-',
-      cons: a.talentLevel ?? null, tal: ['-', '-', '-'], talIcons, art: artUrl,
+      cons: a.talentLevel ?? null, tal: ['-', '-', '-'], talIcons, art: artUrl, artFallback,
       stats: ['HP', '攻撃力', '防御力', '元素熟知', '会心率', '会心ダメージ', '元素チャージ効率', '元素ダメージ'].map(k => [k, '-']),
       wp: { name: '-', lv: '-', r: null, sub: '' },
       sets: [['-', 0]], relics: art.ORDER.map(() => ({ icon: null })),
@@ -107,7 +110,7 @@ async function build(a, uid, base, showOp) {
     name: nm[String(a.avatarId)] || '？', el,
     lv: a.propMap?.['4001']?.val || '-',
     cons: (a.talentIdList || []).length,
-    tal, talIcons, art: artUrl, stats, wp,
+    tal, talIcons, art: artUrl, artFallback, stats, wp,
     sets: sets.length ? sets : [['-', 0]],
     relics,
     total: sc.reduce((x, y) => x + y, 0),
