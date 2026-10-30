@@ -52,7 +52,13 @@ test('public card identifies its owner and only that owner can change it', async
     await select('char', '2');
     assert.deepEqual(builds.map(b => [b.aid, b.base]), [[1, 'em'], [1, 'hp'], [2, 'hp']]);
     assert.equal(posts.length, 0);
-    await select('toggle'); assert.equal(builds.at(-1).showScore, false); assert.equal(i.output.components.length, 2);
+    const labels = () => i.output.components.at(-1).toJSON().components.map(b => b.label);
+    assert.deepEqual(labels(), ['スコア表示ON', 'スコア表示OFF', '終了']);
+    await select('off'); assert.equal(builds.at(-1).showScore, false); assert.equal(i.output.components.length, 2);
+    assert.deepEqual(labels(), ['スコア表示ON', 'スコア表示OFF', '終了']);
+    await select('off'); assert.equal(builds.at(-1).showScore, false);
+    await select('on'); assert.equal(builds.at(-1).showScore, true); assert.equal(i.output.components.length, 3);
+    assert.deepEqual(labels(), ['スコア表示ON', 'スコア表示OFF', '終了']);
     const other = { ...i, user: { id: 'other' } };
     await panel.handle(other); assert.match(i.error.content, /本人だけ/);
     await select('end'); assert.equal(i.deleted, undefined); assert.deepEqual(i.output.components, []);

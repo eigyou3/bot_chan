@@ -45,7 +45,7 @@ function controls(s) {
   const menu = new StringSelectMenuBuilder().setCustomId(`bc_char_${s.id}`).setPlaceholder('キャラクターを選択').addOptions(s.list.slice(0, 25).map(a => ({ label: s.names[a.avatarId] || `キャラ ${a.avatarId}`, value: String(a.avatarId), default: String(a.avatarId) === s.aid })));
   const rows = [row(menu)];
   if (s.score) rows.push(row(new StringSelectMenuBuilder().setCustomId(`bc_base_${s.id}`).setPlaceholder('計算基準を選択').addOptions(Object.entries(art.BASES).map(([value, b]) => ({ label: b.nm, value, default: value === s.base })))));
-  rows.push(row(button(`bc_toggle_${s.id}`, s.score ? 'スコア・OPを非表示にする' : 'スコア・OPを表示する'), button(`bc_end_${s.id}`, '完了')));
+  rows.push(row(button(`bc_on_${s.id}`, 'スコア表示ON', s.score ? ButtonStyle.Primary : ButtonStyle.Secondary), button(`bc_off_${s.id}`, 'スコア表示OFF', s.score ? ButtonStyle.Secondary : ButtonStyle.Primary), button(`bc_end_${s.id}`, '終了')));
   return rows;
 }
 
@@ -94,6 +94,8 @@ async function handle(i) {
     if (action === 'char' && s.list.some(a => String(a.avatarId) === i.values[0])) s.aid = i.values[0];
     if (action === 'base' && art.BASES[i.values[0]]) s.base = i.values[0];
     if (action === 'toggle') s.score = !s.score;
+    if (action === 'on') s.score = true;
+    if (action === 'off') s.score = false;
     return await refresh(i, s);
   } finally { s.busy = false; }
 }
