@@ -28,7 +28,7 @@ function generalGuide() {
     '`/alarm`・`/alarm-off`：毎日のアラーム設定・解除',
     '`/setvc`：VC参加通知の送信先を設定',
     '`/vcrank on:True／False`：週間VCランキングのON／OFF',
-    '`/setbump`：メンションなしのbump案内を設定',
+    '`/setbump here:True／False`：bump案内を設定。@here通知のON／OFFを選べます（初回の省略時はOFF）。DISBOARD本体の `/bump` はDISBOARDアプリのコマンドを使用してください。',
     '', '**Bot管理者本人専用**',
     '`/servers`：Botが参加している全サーバーの名前・IDを公開投稿',
     '', '`/help`：この案内を表示。原神サーバーでは専用コマンドの使い方も表示します。',
