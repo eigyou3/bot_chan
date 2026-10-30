@@ -4,6 +4,7 @@ const wel = require('../utils/welcome');
 const vr = require('../utils/vcrank');
 const gn = require('../utils/gnews');
 const bump = require('../utils/bump');
+const alarm = require('../utils/alarm');
 const { syncAll } = require('../utils/registerCommands');
 
 module.exports = {
@@ -39,13 +40,7 @@ module.exports = {
       await vr.tick(client).catch(e => console.error('VC集計エラー:', e.message));
       await bump.tick(client).catch(e => console.error('bumpエラー:', e.message));
 
-      for (const d of st.db.values()) {
-        for (const a of d.alarms) {
-          if (a.time !== now) continue;
-          const ch = await client.channels.fetch(a.ch).catch(() => null);
-          if (ch) await ch.send(a.msg).catch(e => console.error('アラーム送信エラー:', e.message));
-        }
-      }
+      await alarm.tick(client, now).catch(e => console.error('アラーム処理エラー:', e.message));
     }, 20000);
   },
 };
