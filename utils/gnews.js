@@ -2,7 +2,7 @@ const { dismiss } = require('./feedback');
 const { EmbedBuilder, ActionRowBuilder, RoleSelectMenuBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const st = require('./store');
 const { isAdmin, deny } = require('./perm');
-const { GI } = require('./gi');
+const { isGI } = require('./gi');
 
 // 原神のゲーム内お知らせ
 const URL = 'https://sg-hk4e-api.hoyoverse.com/common/hk4e_global/announcement/api/getAnnContent?game=hk4e&game_biz=hk4e_global&lang=ja&bundle_id=hk4e_global&platform=pc&region=os_asia&level=55&uid=100000000';
@@ -171,7 +171,7 @@ async function run(g, list) {
 }
 
 async function tick(client) {
-  const gs = [...client.guilds.cache.values()].filter(g => GI.includes(g.id) && st.get(g.id).gnews?.ch);
+  const gs = [...client.guilds.cache.values()].filter(g => isGI(g.id) && st.get(g.id).gnews?.ch);
   if (!gs.length) return;
   const list = await fetchAll();
   for (const g of gs) await run(g, list).catch(e => console.error('お知らせエラー:', e.message));
@@ -179,7 +179,7 @@ async function tick(client) {
 
 // /setgenshinnews
 async function set(i) {
-  if (!GI.includes(i.guildId)) return i.reply({ embeds: [box('❌ このサーバーではこのコマンドを使用できません。')], ephemeral: true });
+  if (!isGI(i.guildId)) return i.reply({ embeds: [box('❌ このサーバーではこのコマンドを使用できません。')], ephemeral: true });
   if (!isAdmin(i)) return deny(i);
   const menu = new RoleSelectMenuBuilder().setCustomId('gn_role').setPlaceholder('メンションするロールを選ぶ');
   const none = new ButtonBuilder().setCustomId('gn_none').setLabel('メンションしない').setStyle(ButtonStyle.Secondary);

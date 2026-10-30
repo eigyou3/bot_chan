@@ -16,6 +16,9 @@ module.exports = {
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
+      if (interaction.guild && !['setup', 'setgenshin', 'help', 'servers'].includes(interaction.commandName) && !st.findCh(interaction.guild)) {
+        return interaction.reply({ content: '⚠️ このBotは設定保存用の #bot-config が必要です。サーバー管理者が `/setup` を実行してください。原神サーバーとして登録する場合は `/setgenshin` でも準備できます。使い方は `/help`。', allowedMentions: { parse: [] } });
+      }
       try { await command.execute(interaction, client); } catch (error) { console.error(error); }
       return;
     }

@@ -1,9 +1,10 @@
-const { REST, Routes } = require('discord.js');
+const { REST } = require('discord.js');
 const st = require('../utils/store');
 const wel = require('../utils/welcome');
 const vr = require('../utils/vcrank');
 const gn = require('../utils/gnews');
 const bump = require('../utils/bump');
+const { syncAll } = require('../utils/registerCommands');
 
 module.exports = {
   name: 'clientReady',
@@ -11,23 +12,15 @@ module.exports = {
   async execute(client) {
     console.log(`ログイン完了: ${client.user.tag}`);
 
-    // スラッシュコマンド登録
-    // guild指定ありのコマンドはそのサーバーだけに出す
+    // 設定を先に戻し、登録済み原神サーバーのコマンドも復元する。
+    await st.loadAll(client);
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-    const all = [...client.commands.values()];
     try {
-      await rest.put(Routes.applicationCommands(client.user.id), { body: all.filter(c => !c.guild).map(c => c.data.toJSON()) });
-      const gs = {};
-      for (const c of all.filter(c => c.guild)) for (const id of [].concat(c.guild)) (gs[id] ||= []).push(c.data.toJSON());
-      for (const [gid, body] of Object.entries(gs)) {
-        await rest.put(Routes.applicationGuildCommands(client.user.id, gid), { body }).catch(e => console.error(`コマンド登録エラー(${gid}):`, e.message));
-      }
+      await syncAll(client, rest);
     } catch (e) {
       console.error('コマンド登録エラー:', e);
     }
 
-    // 各サーバーの #bot-config から設定を戻す
-    await st.loadAll(client);
     await vr.init(client).catch(e => console.error('VC集計の初期化エラー:', e.message));
 
     // 原神のお知らせ 1時間おき（起動1分後に1回）

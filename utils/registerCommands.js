@@ -1,0 +1,24 @@
+const { Routes } = require('discord.js');
+const { isGI, guildIds } = require('./gi');
+
+function guildCommands(client, id) {
+  return [...client.commands.values()]
+    .filter(c => c.genshin ? isGI(id) : c.guild && [].concat(c.guild).includes(id))
+    .map(c => c.data.toJSON());
+}
+
+async function syncGuild(client, id, rest = client.rest) {
+  return rest.put(Routes.applicationGuildCommands(client.user.id, id), { body: guildCommands(client, id) });
+}
+
+async function syncAll(client, rest = client.rest) {
+  const all = [...client.commands.values()];
+  await rest.put(Routes.applicationCommands(client.user.id), { body: all.filter(c => !c.guild && !c.genshin).map(c => c.data.toJSON()) });
+  const ids = new Set([...guildIds(client), ...all.filter(c => c.guild).flatMap(c => [].concat(c.guild))]);
+  for (const id of ids) {
+    if (!client.guilds.cache.has(id)) continue;
+    await syncGuild(client, id, rest).catch(e => console.error(`コマンド登録エラー(${id}):`, e.message));
+  }
+}
+
+module.exports = { guildCommands, syncGuild, syncAll };

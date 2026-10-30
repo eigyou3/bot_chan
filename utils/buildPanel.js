@@ -3,7 +3,7 @@ const { randomBytes } = require('crypto');
 const st = require('./store');
 const en = require('./enka');
 const art = require('./artifact');
-const { GI } = require('./gi');
+const { isGI } = require('./gi');
 const sessions = new Map();
 const locks = new Set();
 const TTL = 14 * 60 * 1000;
@@ -33,7 +33,7 @@ async function place(ch, create = false) {
 }
 
 async function start(i) {
-  if (!GI.includes(i.guildId)) return i.reply({ content: 'このサーバーでは使用できません。', ephemeral: true });
+  if (!isGI(i.guildId)) return i.reply({ content: 'このサーバーでは使用できません。', ephemeral: true });
   await i.deferReply();
   await place(i.channel, true);
   const saved = await st.save(i.guild);
@@ -69,7 +69,7 @@ async function refresh(i, s) {
 }
 
 async function handle(i) {
-  if (!GI.includes(i.guildId)) return i.reply({ content: 'このサーバーでは使用できません。', ephemeral: true });
+  if (!isGI(i.guildId)) return i.reply({ content: 'このサーバーでは使用できません。', ephemeral: true });
   // 放置した画面の画像バッファは解放する。
   for (const [id, s] of sessions) if (Date.now() - s.at > TTL) sessions.delete(id);
   if (i.customId.startsWith('bc_open_')) {
