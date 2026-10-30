@@ -3,6 +3,14 @@ const UA = 'bot_chan/1.0 (discord bot)';
 const RAW = 'https://raw.githubusercontent.com/EnkaNetwork/API-docs/master/store/';
 
 const UI = 'https://enka.network/ui/';
+// Enka lists Mannequin (ドール) forms as avatarId-elementVariant.
+// API profile responses may use numeric base IDs.
+const DOLL = { '10000117': 'MannequinBoy', '10000118': 'MannequinGirl' };
+const uiPath = value => (value && value !== 'None')
+  ? `${UI}${String(value).replace(/^\\/ui\\//, '').replace(/\\.png$/, '')}.png`
+  : null;
+const baseAvatarId = id => String(id).split('-')[0];
+
 
 let nm = null, nmAt = 0;
 let chr = {}, pfp = {}, ja = {};
@@ -29,7 +37,12 @@ async function names() {
     const m = {};
     for (const [id, v] of Object.entries(c)) {
       const n = ja[String(v.NameTextMapHash)];
-      if (n) m[id.split('-')[0]] = n;
+      if (n) m[baseAvatarId(id)] = n;
+      // Resolve Enka's hyphenated form keys using the numeric base avatar ID.
+      const baseId = baseAvatarId(id);
+      if (!c[baseId] || (v.Element && v.Element !== 'None' && c[baseId].Element === 'None')) {
+        c[baseId] = v;
+      }
     }
     nm = m;
     chr = c;
@@ -90,7 +103,8 @@ async function player(uid) {
 const loc = k => ja[String(k)] || '';
 
 // キャラのデータ（元素・天賦の並びなど）
-const char = id => chr[String(id)] || null;
+const char = id => chr[String(id)] || chr[baseAvatarId(id)] || null;
+const doll = id => DOLL[baseAvatarId(id)] || null;
 function relicSet(e) {
   const iconId = e.flat?.icon?.match(/UI_RelicIcon_(\d+)_/)?.[1];
   const setId = relicItems[String(e.itemId)]?.SetId || iconId;
@@ -98,4 +112,4 @@ function relicSet(e) {
   return { id: String(setId || hash || e.itemId), name: loc(hash) || loc(relicSets[setId]?.Name) || `セット ${setId || hash || '不明'}` };
 }
 
-module.exports = { names, cleanUid, player, charIcon, pfpIcon, loc, char, relicSet, UI };
+module.exports = { names, cleanUid, player, charIcon, pfpIcon, loc, char, relicSet, UI, doll, uiPath };
