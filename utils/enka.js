@@ -6,9 +6,13 @@ const UI = 'https://enka.network/ui/';
 // Enka lists Mannequin (ドール) forms as avatarId-elementVariant.
 // API profile responses may use numeric base IDs.
 const DOLL = { '10000117': 'MannequinBoy', '10000118': 'MannequinGirl' };
-const uiPath = value => (value && value !== 'None')
-  ? `${UI}${String(value).replace(/^\\/ui\\//, '').replace(/\\.png$/, '')}.png`
-  : null;
+const uiPath = value => {
+  if (!value || value === 'None') return null;
+  let path = String(value);
+  if (path.startsWith('/ui/')) path = path.slice(4);
+  if (path.endsWith('.png')) path = path.slice(0, -4);
+  return `${UI}${path}.png`;
+};
 const baseAvatarId = id => String(id).split('-')[0];
 
 
@@ -56,11 +60,13 @@ async function names() {
 
 // キャラアイコンのURL（衣装も見る）
 function charIcon(a) {
-  const c = chr[String(a.avatarId)];
+  const baseId = baseAvatarId(a.avatarId);
+  const c = chr[String(a.avatarId)] || chr[baseId];
+  // Mannequin icons are stable even if the avatar store lacks a base ID.
+  if (DOLL[baseId]) return uiPath(`UI_AvatarIcon_${DOLL[baseId]}`);
   if (!c) return null;
   const cos = a.costumeId && c.Costumes?.[String(a.costumeId)];
-  const ic = cos?.icon || (c.SideIconName || '').replace('_Side_', '_');
-  return ic ? `${UI}${ic}.png` : null;
+  return uiPath(cos?.icon || (c.SideIconName || '').replace('_Side_', '_'));
 }
 
 // プロフィールアイコンのURL（新しい形式はid、古いのはavatarId）
