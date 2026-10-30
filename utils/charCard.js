@@ -89,6 +89,7 @@ async function img(url) {
 async function charCard(d) {
   const [ac, tint, elName] = EL[d.el] || ['#888888', '#F2F2F2', ''];
   const [art, wpi, ...ris] = await Promise.all([img(d.art), img(d.wp?.icon), ...d.relics.map(r => img(r.icon))]);
+  const talents = await Promise.all((d.talIcons || []).map(img));
 
   const cv = createCanvas(W, H);
   const ctx = cv.getContext('2d');
@@ -162,13 +163,22 @@ async function charCard(d) {
     ctx.fillText(ct, 58 + lw + 30, 80);
   }
 
-  // 天賦 A E Q（Lvの下）
+  // 天賦アイコン（通常攻撃・元素スキル・元素爆発）。白いアイコンが読める下地。
   let tx = 58;
-  ['A', 'E', 'Q'].forEach((k, i) => {
+  ['通常', 'スキル', '爆発'].forEach((label, i) => {
+    ctx.fillStyle = 'rgba(43,43,43,0.78)';
+    rr(ctx, tx, 101, 48, 48, 12);
+    ctx.fill();
+    if (talents[i]) ctx.drawImage(talents[i], tx + 3, 104, 42, 42);
+    else {
+      ctx.font = font('ZenMaruB', 14);
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, tx + 24, 131);
+      ctx.textAlign = 'left';
+    }
+    tx += 58;
     ctx.font = font('ZenMaruB', 30);
-    ctx.fillStyle = ac;
-    txt(ctx, k, tx, 134);
-    tx += ctx.measureText(k).width + 8;
     ctx.fillStyle = INK;
     const v = String(d.tal[i] ?? '-');
     txt(ctx, v, tx, 134);

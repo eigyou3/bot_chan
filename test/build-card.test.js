@@ -12,6 +12,19 @@ const { GI } = require('../utils/gi');
 const interactions = require('../events/interactionCreate');
 const intro = require('../utils/intro');
 
+test('talent icons follow talent level order in both Enka formats and private profiles', async () => {
+  const original = { names: en.names, char: en.char };
+  en.names = async () => ({ 1: 'テスト' });
+  en.char = () => ({ SkillOrder: [3, 1, 2], Skills: { 1: '/ui/Skill_S_Test.png', 2: 'Skill_E_Test', 3: '/ui/Skill_A_Test.png' }, ProudMap: { 2: 100 } });
+  try {
+    const d = await character.build({ avatarId: 1, skillLevelMap: { 1: 8, 2: 10, 3: 6 }, proudSkillExtraLevelMap: { 100: 3 } }, '123456789', 'hp', true);
+    assert.deepEqual(d.tal, [6, 8, 13]);
+    assert.deepEqual(d.talIcons, ['Skill_A_Test', 'Skill_S_Test', 'Skill_E_Test'].map(name => en.UI + name + '.png'));
+    const limited = await character.build({ avatarId: 1, lim: true }, '123456789', null, false);
+    assert.deepEqual(limited.talIcons, d.talIcons); assert.deepEqual(limited.tal, ['-', '-', '-']);
+  } finally { en.names = original.names; en.char = original.char; }
+});
+
 test('UID registration publicly identifies the Discord user without pinging them', async () => {
   const original = { player: en.player, names: en.names, saveLater: st.saveLater };
   en.player = async () => ({ p: { nickname: 'ゲーム内の名前', showAvatarInfoList: [] } });
