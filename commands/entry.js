@@ -28,7 +28,7 @@ module.exports = {
     if (!isOwner(interaction)) return deny(interaction);
 
     // 💡 誰が使ったか非表示にするため、最初から ephemeral: true でコマンド自体への応答を完了させる
-    await interaction.reply({ content: '✅ エントリー募集を開始しました。', ephemeral: true });
+    await interaction.deferReply({ ephemeral: true });
 
     const text = interaction.options.getString('text');
     const role = interaction.options.getRole('role');
@@ -90,5 +90,6 @@ module.exports = {
     // チャンネルごとに募集データ保存
     st.get(interaction.guildId).entry[channel.id] = { ...data, msg: response.id };
     await st.save(interaction.guild);
+    await interaction.deleteReply();
   },
 };

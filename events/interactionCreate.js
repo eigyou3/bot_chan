@@ -4,7 +4,8 @@ const { annRows } = require('../utils/annRows');
 const intro = require('../utils/intro');
 const art = require('../utils/artifact');
 const gift = require('../utils/gift');
-const chr = require('../utils/character');
+const buildPanel = require('../utils/buildPanel');
+const { dismiss } = require('../utils/feedback');
 const dict = require('../utils/dict');
 const off = require('../utils/off');
 const gn = require('../utils/gnews');
@@ -19,12 +20,22 @@ module.exports = {
       return;
     }
 
+    if (interaction.customId?.startsWith('bc_')) {
+      try { await buildPanel.handle(interaction); } catch (e) {
+        console.error('ビルドカードエラー:', e);
+        const payload = { content: 'カードを作成できませんでした。もう一度試してね。', embeds: [], attachments: [], components: [] };
+        if (interaction.deferred || interaction.replied) await interaction.editReply(payload).catch(() => null);
+        else await interaction.reply({ ...payload, ephemeral: true }).catch(() => null);
+      }
+      return;
+    }
+
     // お知らせのロール選択
     if (interaction.isRoleSelectMenu() && interaction.customId === 'gn_role') return gn.pick(interaction).catch(e => console.error('お知らせ設定エラー:', e.message));
 
     // 聖遺物自慢のメニュー
     if (interaction.isStringSelectMenu()) {
-      const run = { art_c: art.pickChar, art_b: art.pickBase, art_p: art.pickPart, chr_c: chr.pickChar, chr_o: chr.pickOp, chr_b: chr.pickBase }[interaction.customId.slice(0, 5)];
+      const run = { art_c: art.pickChar, art_b: art.pickBase, art_p: art.pickPart }[interaction.customId.slice(0, 5)];
       if (interaction.customId.startsWith('dic_')) return dict.pick(interaction).catch(e => console.error('辞典エラー:', e.message));
       if (interaction.customId.startsWith('off_')) return off.pick(interaction).catch(e => console.error('解除エラー:', e.message));
       if (run) return run(interaction).catch(e => console.error('聖遺物エラー:', e.message));
@@ -35,7 +46,6 @@ module.exports = {
       // UID登録
       if (interaction.customId.startsWith('intro_open_')) return intro.open(interaction).catch(e => console.error(e));
       if (interaction.customId === 'gift_open') return gift.open(interaction).catch(e => console.error(e));
-      if (interaction.customId === 'chr_end') return chr.end(interaction).catch(() => null);
       if (interaction.customId === 'gn_none') return gn.pick(interaction).catch(e => console.error('お知らせ設定エラー:', e.message));
       // 押すたびに付く/外れる
       if (interaction.customId.startsWith('ann_tg_')) {
@@ -46,10 +56,14 @@ module.exports = {
 
         if (mem.roles.cache.has(id)) {
           await mem.roles.remove(role).catch(() => null);
-          return interaction.reply({ content: `🗑️ <@&${id}> を外しました。`, ephemeral: true });
+          await interaction.reply({ content: `🗑️ <@&${id}> を外しました。`, ephemeral: true });
+          dismiss(interaction);
+          return;
         }
         await mem.roles.add(role).catch(() => null);
-        return interaction.reply({ content: `✅ <@&${id}> を付けました！`, ephemeral: true });
+        await interaction.reply({ content: `✅ <@&${id}> を付けました！`, ephemeral: true });
+        dismiss(interaction);
+        return;
       }
 
       // 前の形式のボタン（古いアナウンス用に残してる）
@@ -61,10 +75,14 @@ module.exports = {
 
         if (action === 'add') {
           await member.roles.add(role).catch(() => null);
-          return interaction.reply({ content: `✅ <@&${roleId}> を付与しました！`, ephemeral: true });
+          await interaction.reply({ content: `✅ <@&${roleId}> を付与しました！`, ephemeral: true });
+          dismiss(interaction);
+          return;
         } else {
           await member.roles.remove(role).catch(() => null);
-          return interaction.reply({ content: `🗑️ <@&${roleId}> を解除しました。`, ephemeral: true });
+          await interaction.reply({ content: `🗑️ <@&${roleId}> を解除しました。`, ephemeral: true });
+          dismiss(interaction);
+          return;
         }
       }
 
@@ -106,6 +124,7 @@ module.exports = {
         }
 
         await interaction.reply({ content: replyContent, ephemeral: true });
+        dismiss(interaction);
         st.saveLater(interaction.guild, 5000);
 
         const targetMsg = await interaction.channel.messages.fetch(data.msg).catch(() => null);
@@ -143,7 +162,8 @@ module.exports = {
         }
 
         const msg = await interaction.channel.send({ embeds: [embed], components: annRows(interaction.guild, p.ids), files });
-        await interaction.editReply(box(up && !files.length ? '送信したよ（画像は読み込めなかったので外したよ）' : '送信したよ'));
+        if (up && !files.length) await interaction.editReply(box('⚠️ 画像を読み込めなかったため、文章だけ送信しました。'));
+        else await interaction.deleteReply();
 
         if (p.sticky) {
           st.get(interaction.guildId).sticky[interaction.channelId] = { messageId: msg.id, text, roles: p.ids };

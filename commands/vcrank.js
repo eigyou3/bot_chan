@@ -1,3 +1,4 @@
+const { done } = require('../utils/feedback');
 const { SlashCommandBuilder } = require('discord.js');
 const st = require('../utils/store');
 const vr = require('../utils/vcrank');
@@ -22,12 +23,12 @@ module.exports = {
       await vr.start(g);
       await st.save(g);
       const note = d.vc ? '' : '\n⚠️ VC通知先が未設定なので、先に /setvc をしてね';
-      return interaction.editReply(`✅ VCランキングをONにしました。${note}${st.warn(g)}`);
+      return done(interaction, `✅ VCランキングをONにしました。${note}${st.warn(g)}`);
     }
 
     d.rkOff = true;
     await vr.stop(g);
     await st.save(g);
-    return interaction.editReply(`⏸ VCランキングをOFFにしました。集計と投稿が止まります（今週の記録は残ります）。${st.warn(g)}`);
+    return done(interaction, `⏸ VCランキングをOFFにしました。集計と投稿が止まります（今週の記録は残ります）。${st.warn(g)}`);
   },
 };

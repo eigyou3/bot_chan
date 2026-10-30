@@ -1,3 +1,4 @@
+const { dismiss } = require('./feedback');
 const { EmbedBuilder, ActionRowBuilder, RoleSelectMenuBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const st = require('./store');
 const { isAdmin, deny } = require('./perm');
@@ -203,6 +204,7 @@ async function pick(i) {
   d.gnews = { ch: i.channelId, role, seen: old?.ch === i.channelId ? old.seen : [], posts: old?.ch === i.channelId ? old.posts : {} };
   await i.update({ embeds: [box(`✅ このチャンネルにお知らせを流すよ。${role ? `\nメンション：<@&${role}>` : '\nメンションはしないよ。'}\n開催中のものをまとめて流すね。${st.warn(i.guild)}`)], components: [] });
   await run(i.guild, await fetchAll());
+  if (!st.warn(i.guild)) dismiss(i);
 }
 
 module.exports = { set, pick, tick, parse, embed, run, lines };

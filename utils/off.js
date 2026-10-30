@@ -1,3 +1,4 @@
+const { dismiss } = require('./feedback');
 const { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 const st = require('./store');
 const { isAdmin, deny } = require('./perm');
@@ -42,13 +43,15 @@ async function pick(i) {
     const gone = ns.map(n => d.alarms[n]).filter(Boolean);
     for (const n of ns) d.alarms.splice(n, 1);
     await st.save(i.guild);
-    return i.update({ ...box(`⏰ ${gone.length}件のアラームを解除したよ。\n${gone.map(a => `・${a.time}　${cut(a.msg, 40)}`).join('\n')}`), components: [] });
+    await i.update({ ...box(`⏰ ${gone.length}件のアラームを解除したよ。\n${gone.map(a => `・${a.time}　${cut(a.msg, 40)}`).join('\n')}`), components: [] });
+    dismiss(i);
   }
 
   if (i.customId === 'off_sk') {
     for (const c of i.values) delete d.sticky[c];
     await st.save(i.guild);
-    return i.update({ ...box(`📌 ${i.values.length}件の常駐を解除したよ。\n${i.values.map(c => `・<#${c}>`).join('\n')}`), components: [] });
+    await i.update({ ...box(`📌 ${i.values.length}件の常駐を解除したよ。\n${i.values.map(c => `・<#${c}>`).join('\n')}`), components: [] });
+    dismiss(i);
   }
 }
 

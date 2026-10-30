@@ -239,7 +239,7 @@ async function charCard(d) {
   ctx.fillStyle = INK;
   ctx.textAlign = 'left';
   ctx.fillText(setTxt, 64 + 92, y + 24);
-  if (d.showOp) {
+  if (d.showScore ?? d.showOp) {
     // 合計スコアだけ色付き
     ctx.font = font('ZenMaruB', 30);
     ctx.fillStyle = ac;
@@ -285,9 +285,11 @@ async function charCard(d) {
     ctx.fillStyle = '#666';
     r.subs.forEach((s, j) => ctx.fillText(s, x + TW / 2, y + 172 + j * 30));
 
-    ctx.font = font('ZenMaruB', 32);
-    ctx.fillStyle = r.best ? ac : SUB;
-    ctx.fillText(r.score.toFixed(1), x + TW / 2, y + TH - 22);
+    if (d.showScore ?? d.showOp) {
+      ctx.font = font('ZenMaruB', 32);
+      ctx.fillStyle = r.best ? ac : SUB;
+      ctx.fillText(r.score.toFixed(1), x + TW / 2, y + TH - 22);
+    }
   });
   y += TH;
 

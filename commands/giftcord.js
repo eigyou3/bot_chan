@@ -17,6 +17,6 @@ module.exports = {
 
     await interaction.deferReply({ ephemeral: true });
     await place(interaction.channel);
-    return interaction.editReply(box('✅ 案内を置きました（常に一番下に表示）。'));
+    return interaction.deleteReply();
   },
 };

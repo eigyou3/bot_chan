@@ -20,6 +20,6 @@ module.exports = {
     const role = interaction.options.getRole('role');
     await interaction.deferReply({ ephemeral: true });
     await place(interaction.channel, role.id);
-    return interaction.editReply(`✅ 案内を置きました（常に一番下に表示）。登録した人には <@&${role.id}> が付きます。`);
+    return interaction.deleteReply();
   },
 };

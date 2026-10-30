@@ -5,6 +5,7 @@ const intro = require('../utils/intro');
 const gift = require('../utils/gift');
 const dict = require('../utils/dict');
 const bump = require('../utils/bump');
+const buildPanel = require('../utils/buildPanel');
 const wel = require('../utils/welcome');
 const { parseVisitorMessage } = require('../utils/imageGenerator');
 
@@ -26,6 +27,10 @@ module.exports = {
     // ギフトコードの案内も
     if (message.guild && message.author.id !== client.user.id && st.get(message.guildId).giftP?.ch === message.channelId) {
       gift.bump(message.channel).catch(() => null);
+    }
+
+    if (message.guild && message.author.id !== client.user.id && st.get(message.guildId).buildPanels?.[message.channelId]) {
+      await buildPanel.place(message.channel).catch(e => console.error('ビルド案内エラー:', e.message));
     }
 
     if (message.author.bot) return;

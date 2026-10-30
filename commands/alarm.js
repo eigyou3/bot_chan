@@ -1,3 +1,4 @@
+const { done } = require('../utils/feedback');
 const { SlashCommandBuilder } = require('discord.js');
 const st = require('../utils/store');
 const { isAdmin, deny } = require('../utils/perm');
@@ -35,6 +36,6 @@ module.exports = {
 
     await interaction.deferReply({ ephemeral: true });
     await st.save(g);
-    return interaction.editReply(`⏰ 以下の時刻に毎日繰り返すアラームを設定しました。\n設定時刻: ${ok.map(t => `**${t}**`).join(', ')}${st.warn(g)}`);
+    return done(interaction, `⏰ 以下の時刻に毎日繰り返すアラームを設定しました。\n設定時刻: ${ok.map(t => `**${t}**`).join(', ')}${st.warn(g)}`);
   },
 };

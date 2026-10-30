@@ -1,4 +1,4 @@
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const st = require('./store');
 const { isAdmin, deny } = require('./perm');
 
@@ -18,11 +18,15 @@ function isBump(m) {
 
 const who = m => m.interactionMetadata?.user?.id || m.interaction?.user?.id || null;
 
-// 前のカウント/リマインドを消して、新しいのを出す
+// 既存の案内を編集する。消えている場合だけ通知音なしで投稿する。
 async function put(ch, b, opt) {
-  if (b.msg) await ch.messages.delete(b.msg).catch(() => null);
-  const m = await ch.send(opt).catch(e => { console.error('bump投稿失敗:', e.message); return null; });
-  b.msg = m?.id || null;
+  const payload = { content: '', ...opt, allowedMentions: { parse: [] } };
+  const old = b.msg && await ch.messages.fetch(b.msg).catch(() => null);
+  if (old && await old.edit(payload).catch(() => null)) return true;
+  const m = await ch.send({ ...payload, flags: MessageFlags.SuppressNotifications }).catch(e => { console.error('bump投稿失敗:', e.message); return null; });
+  if (!m) return false;
+  b.msg = m.id;
+  return true;
 }
 
 function countMsg(at, uid) {
@@ -70,7 +74,7 @@ async function set(i) {
   }
 
   await st.save(i.guild);
-  return i.editReply({ embeds: [box(`✅ このチャンネルでbumpのリマインドをするよ。\n時間になったら @here で知らせるね。${st.warn(i.guild)}`)] });
+  return require('./feedback').done(i, { embeds: [box(`✅ このチャンネルでbumpの案内を表示するよ。\n全員へのメンションなしで、案内を静かに更新するね。${st.warn(i.guild)}`)] });
 }
 
 // 毎分：時間になったらリマインド
@@ -82,8 +86,7 @@ async function tick(client) {
     if (now < Math.floor(b.at / 1000) + WAIT) continue;
     const ch = g.channels.cache.get(b.ch);
     if (!ch) continue;
-    b.rem = true;
-    await put(ch, b, { content: '@here', embeds: [box('bumpできるよ！ `/bump` してね')], allowedMentions: { parse: ['everyone'] } });
+    b.rem = await put(ch, b, { embeds: [box('bumpできるよ！ `/bump` してね')] });
     await st.save(g);
   }
 }
