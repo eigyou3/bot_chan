@@ -101,7 +101,7 @@ async function build(a, uid, base, showOp) {
     relics,
     total: sc.reduce((x, y) => x + y, 0),
     base: base ? art.BASES[base].nm : '',
-    showOp: true, showScore: showOp, uid,
+    showOp, showScore: showOp, uid,
   };
 }
 

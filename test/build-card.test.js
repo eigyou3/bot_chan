@@ -10,8 +10,26 @@ const panel = require('../utils/buildPanel');
 const bump = require('../utils/bump');
 const { GI } = require('../utils/gi');
 const interactions = require('../events/interactionCreate');
+const intro = require('../utils/intro');
 
-test('private preview can change bases, characters and score mode before public posting', async () => {
+test('UID registration publicly identifies the Discord user without pinging them', async () => {
+  const original = { player: en.player, names: en.names, saveLater: st.saveLater };
+  en.player = async () => ({ p: { nickname: 'ゲーム内の名前', showAvatarInfoList: [] } });
+  en.names = async () => ({}); st.saveLater = () => {};
+  let output;
+  const i = { guildId: 'intro-test', channelId: 'c', customId: 'intro_mdl_role',
+    user: { id: '123456789', displayAvatarURL: () => 'https://example.com/avatar.png' },
+    member: { displayName: 'Discordの名前' }, deferUpdate: async () => {}, fields: { getTextInputValue: () => '123456789' },
+    guild: { roles: { fetch: async () => null } }, channel: { send: async p => { output = p; return { id: 'msg' }; } } };
+  try {
+    await intro.submit(i);
+    assert.match(output.content, /<@123456789> がUIDを登録/);
+    assert.deepEqual(output.allowedMentions.parse, []);
+    assert.match(output.embeds[0].toJSON().author.name, /Discordの名前/);
+  } finally { en.player = original.player; en.names = original.names; st.saveLater = original.saveLater; st.db.clear(); }
+});
+
+test('public card identifies its owner and only that owner can change it', async () => {
   const original = { player: en.player, names: en.names, build: character.build, card: cards.charCard, saveLater: st.saveLater };
   const builds = [], posts = [];
   en.player = async () => ({ p: {}, raw: [{ avatarId: 1 }, { avatarId: 2 }] });
@@ -21,9 +39,11 @@ test('private preview can change bases, characters and score mode before public 
   st.saveLater = () => {};
   const guildId = GI[0];
   st.get(guildId).intro = { user: { uid: '123456789' } };
-  const i = { guildId, channelId: 'ch', user: { id: 'user' }, channel: { send: async p => { posts.push(p); return { url: 'https://discord.com/channels/g/c/m' }; } }, customId: 'bc_open_score', deferReply: async () => {}, deferUpdate: async () => {}, editReply: async p => { i.output = p; }, reply: async p => { i.error = p; }, deleteReply: async () => { i.deleted = true; } };
+  const i = { guildId, channelId: 'ch', member: { displayName: 'テストさん' }, user: { id: 'user', displayAvatarURL: () => 'https://example.com/avatar.png' }, channel: { guildId, id: 'ch', send: async p => { posts.push(p); return { url: 'https://discord.com/channels/g/c/m' }; } }, customId: 'bc_open_score', deferReply: async opts => { assert.ok(!opts?.ephemeral); }, deferUpdate: async () => {}, editReply: async p => { i.output = p; }, reply: async p => { i.error = p; }, deleteReply: async () => { i.deleted = true; } };
   try {
     await panel.handle(i);
+    assert.match(i.output.content, /<@user>/);
+    assert.match(i.output.embeds[0].toJSON().author.name, /テストさん/);
     const id = i.output.components[0].toJSON().components[0].custom_id.split('_')[2];
     const select = async (action, value) => { i.customId = `bc_${action}_${id}`; i.values = [value]; await panel.handle(i); i.output.components?.forEach(r => r.toJSON()); };
     await select('char', '1'); assert.equal(builds.length, 0);
@@ -33,23 +53,22 @@ test('private preview can change bases, characters and score mode before public 
     assert.deepEqual(builds.map(b => [b.aid, b.base]), [[1, 'em'], [1, 'hp'], [2, 'hp']]);
     assert.equal(posts.length, 0);
     await select('toggle'); assert.equal(builds.at(-1).showScore, false); assert.equal(i.output.components.length, 2);
-    await select('post'); assert.equal(posts.length, 1);
     const other = { ...i, user: { id: 'other' } };
-    await panel.handle(other); assert.match(i.error.content, /有効期限/);
-    await select('end'); assert.equal(i.deleted, true);
+    await panel.handle(other); assert.match(i.error.content, /本人だけ/);
+    await select('end'); assert.equal(i.deleted, undefined); assert.deepEqual(i.output.components, []);
     await select('char', '1'); assert.match(i.error.content, /有効期限/);
   } finally { Object.assign(en, { player: original.player, names: original.names }); character.build = original.build; cards.charCard = original.card; st.saveLater = original.saveLater; st.db.clear(); }
 });
 
-test('no-score card keeps relic main/sub stats and actual renderer accepts missing equipment', async () => {
+test('score OFF hides relic OP and score; renderer accepts missing equipment', async () => {
   const names = en.names; en.names = async () => ({ 1: 'テスト' });
   try {
     const a = { avatarId: 1, fightPropMap: {}, equipList: [{ reliquary: {}, flat: { equipType: 'EQUIP_BRACER', setNameTextMapHash: 'x', reliquaryMainstat: { mainPropId: 'FIGHT_PROP_HP', statValue: 4780 }, reliquarySubstats: [{ appendPropId: 'FIGHT_PROP_CRITICAL', statValue: 10 }] } }] };
     const d = await character.build(a, '123456789', 'hp', false);
-    assert.equal(d.showOp, true); assert.equal(d.showScore, false);
+    assert.equal(d.showOp, false); assert.equal(d.showScore, false);
     assert.match(d.relics[0].main, /4780/); assert.equal(d.relics[0].subs.length, 1);
     const plain = await cards.charCard(d);
-    const scored = await cards.charCard({ ...d, showScore: true });
+    const scored = await cards.charCard({ ...d, showOp: true, showScore: true });
     assert.equal(plain.subarray(1, 4).toString(), 'PNG'); assert.notDeepEqual(plain, scored);
     const limited = await character.build({ avatarId: 1, lim: true }, '123456789', null, false);
     assert.ok((await cards.charCard(limited)).length > 1000);

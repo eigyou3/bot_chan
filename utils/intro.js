@@ -111,7 +111,7 @@ async function submit(i) {
     const ch = await i.client.channels.fetch(old.ch).catch(() => null);
     if (ch) await ch.messages.delete(old.msg).catch(() => null);
   }
-  const m = await i.channel.send({ embeds: [e], components: [row], files });
+  const m = await i.channel.send({ content: `<@${i.user.id}> がUIDを登録しました`, allowedMentions: { parse: [] }, embeds: [e], components: [row], files });
   d.intro[i.user.id] = { ch: i.channelId, msg: m.id, uid };
   st.saveLater(i.guild, 3000);
 
