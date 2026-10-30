@@ -1,7 +1,7 @@
 const { PermissionFlagsBits, EmbedBuilder } = require('discord.js');
 
-// 自分ともう1人
-const OWNERS = ['1088369918069715024', '936419559165026304'];
+// Bot管理者本人のみ
+const OWNERS = ['1088369918069715024'];
 
 const isOwner = i => OWNERS.includes(i.user.id);
 // 登録した人か、そのサーバーの管理者

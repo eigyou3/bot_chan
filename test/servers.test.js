@@ -23,3 +23,12 @@ test('servers rejects ordinary server admins before disclosing guilds', async ()
   assert.equal(reply.ephemeral, true);
   assert.match(reply.embeds[0].toJSON().description, /権限がありません/);
 });
+
+test('former Bot owner has no owner privileges; local administrator permission still applies', () => {
+  const { isOwner, isAdmin } = require('../utils/perm');
+  const former = { user: { id: '936419559165026304' } };
+  assert.equal(isOwner(former), false);
+  assert.equal(isAdmin(former), false);
+  assert.equal(isOwner({ user: { id: '1088369918069715024' } }), true);
+  assert.equal(isAdmin({ ...former, memberPermissions: { has: () => true } }), true);
+});
