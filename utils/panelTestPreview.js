@@ -1,5 +1,5 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags,
-  StringSelectMenuBuilder, ChannelSelectMenuBuilder, ChannelType, PermissionFlagsBits, ContainerBuilder, TextDisplayBuilder } = require('discord.js');
+  StringSelectMenuBuilder, ChannelSelectMenuBuilder, RoleSelectMenuBuilder, ChannelType, PermissionFlagsBits, ContainerBuilder, TextDisplayBuilder } = require('discord.js');
 const ROOT='pt_';
 const testGuild='1341988738074542111';
 const { isGI } = require('./gi');
@@ -79,6 +79,11 @@ function render(page='home',mode='pending',guildId=null) {
    container.addActionRowComponents(row(button('ranking_on','ON',ButtonStyle.Success),button('ranking_off','OFF',ButtonStyle.Danger)));
   }else if(page==='bump'){
    container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**Bump通知**\nリマインドの通知先と通知方法を設定します。\n\n-# 本番では設定を変更できます。'));
+  }else if(page==='inrole'||page==='inexclude'){
+   const d=st.get(guildId),settings=d.inactiveSettings||{},excluded=page==='inexclude';
+   const current=excluded?settings.exclude||d.inactive?.exclude:settings.role||d.inactive?.role;
+   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('現在：'+(current?'<@&'+current+'>':'未設定')+'\n-# '+(excluded?'除外ロールは未設定にも戻せます。':'対象ロールを指定してください。')));
+   container.addActionRowComponents(row(new RoleSelectMenuBuilder().setCustomId(ROOT+(excluded?'inactive_exclude':'inactive_role')).setPlaceholder(excluded?'除外ロールを選択（選択なしも可）':'対象ロールを選択').setMinValues(excluded?0:1).setMaxValues(1)));
   }else if(page==='inmonths'){
    const d=st.get(guildId);
    container.addTextDisplayComponents(new TextDisplayBuilder().setContent('現在：**'+(d.inactiveMonths||d.inactive?.months||3)+'か月**\n-# 月数の変更では自動キックは有効になりません。'));
@@ -96,12 +101,30 @@ function render(page='home',mode='pending',guildId=null) {
  return {components:[container],flags:MessageFlags.IsComponentsV2,allowedMentions:{parse:[]}};
 }
 async function handle(i){
- if(!(i.isButton()||i.isStringSelectMenu()||i.isChannelSelectMenu())||!i.customId?.startsWith(ROOT))return false;
+ if(!(i.isButton()||i.isStringSelectMenu()||i.isChannelSelectMenu()||i.isRoleSelectMenu())||!i.customId?.startsWith(ROOT))return false;
  if(i.guildId!==testGuild||i.user.id!==i.guild?.ownerId||i.channel?.name!=='bot-config'){
   await i.reply({content:'このテストは指定サーバーの所有者専用です。',flags:MessageFlags.Ephemeral});return true;
  }
  const id=i.customId.slice(ROOT.length);
  const mode=isGI(i.guildId)?'on':'pending';
+ if(id==='inactive_role'||id==='inactive_exclude'){
+  const d=st.get(i.guildId),s=d.inactive||{},field=id==='inactive_role'?'role':'exclude';
+  if(s.enabled)return i.reply({content:'未活動メンバー管理を停止してから変更してください。',flags:MessageFlags.Ephemeral});
+  const value=i.values?.[0]||null;
+  if(field==='role'&&!value)return i.reply({content:'対象ロールを指定してください。',flags:MessageFlags.Ephemeral});
+  if(value&&field==='role'){
+   try{await require('./inactive').managedRole(i.guild,value);}
+   catch(e){return i.reply({content:'ロールを選択できません：'+e.message,flags:MessageFlags.Ephemeral});}
+  }
+  const old={...(d.inactiveSettings||{})};
+  d.inactiveSettings={...old,[field]:value};
+  if(!await st.save(i.guild)){
+   d.inactiveSettings=old;
+   return i.reply({content:'設定の保存に失敗しました。',flags:MessageFlags.Ephemeral});
+  }
+  await i.update(render(field==='role'?'inrole':'inexclude',mode,i.guildId));
+  return true;
+ }
  if(id==='months'){
   const months=Number(i.values?.[0]),d=st.get(i.guildId);
   if(!Number.isInteger(months)||months<1||months>12)return i.reply({content:'1〜12か月を選んでください。',flags:MessageFlags.Ephemeral});
