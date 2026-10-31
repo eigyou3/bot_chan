@@ -1,5 +1,5 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags,
-  StringSelectMenuBuilder, ChannelSelectMenuBuilder, RoleSelectMenuBuilder, ChannelType, PermissionFlagsBits, ContainerBuilder, TextDisplayBuilder } = require('discord.js');
+  StringSelectMenuBuilder, ChannelSelectMenuBuilder, RoleSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ChannelType, PermissionFlagsBits, ContainerBuilder, TextDisplayBuilder } = require('discord.js');
 const ROOT='pt_';
 const testGuild='1341988738074542111';
 const { isGI } = require('./gi');
@@ -79,6 +79,9 @@ function render(page='home',mode='pending',guildId=null) {
    container.addActionRowComponents(row(button('ranking_on','ON',ButtonStyle.Success),button('ranking_off','OFF',ButtonStyle.Danger)));
   }else if(page==='bump'){
    container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**Bump通知**\nリマインドの通知先と通知方法を設定します。\n\n-# 本番では設定を変更できます。'));
+  }else if(page==='contact'){
+   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('不具合報告・デバッグの相談・機能のご要望などを制作者に送信できます。\n-# サーバー名と送信者のDiscord IDも送られます。'));
+   container.addActionRowComponents(row(button('contact_write','お問い合わせを作成',ButtonStyle.Primary)));
   }else if(page==='inrole'||page==='inexclude'){
    const d=st.get(guildId),settings=d.inactiveSettings||{},excluded=page==='inexclude';
    const current=excluded?settings.exclude||d.inactive?.exclude:settings.role||d.inactive?.role;
@@ -101,12 +104,31 @@ function render(page='home',mode='pending',guildId=null) {
  return {components:[container],flags:MessageFlags.IsComponentsV2,allowedMentions:{parse:[]}};
 }
 async function handle(i){
- if(!(i.isButton()||i.isStringSelectMenu()||i.isChannelSelectMenu()||i.isRoleSelectMenu())||!i.customId?.startsWith(ROOT))return false;
+ if(!(i.isButton()||i.isStringSelectMenu()||i.isChannelSelectMenu()||i.isRoleSelectMenu()||i.isModalSubmit())||!i.customId?.startsWith(ROOT))return false;
  if(i.guildId!==testGuild||i.user.id!==i.guild?.ownerId||i.channel?.name!=='bot-config'){
   await i.reply({content:'このテストは指定サーバーの所有者専用です。',flags:MessageFlags.Ephemeral});return true;
  }
  const id=i.customId.slice(ROOT.length);
  const mode=isGI(i.guildId)?'on':'pending';
+ if(id==='contact_write'){
+  const modal=new ModalBuilder().setCustomId(ROOT+'contact_submit').setTitle('制作者へのお問い合わせ');
+  modal.addComponents(row(new TextInputBuilder().setCustomId('message').setLabel('お問い合わせ内容').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1500)));
+  await i.showModal(modal);
+  return true;
+ }
+ if(id==='contact_submit'){
+  const msg=i.fields.getTextInputValue('message').trim();
+  if(!msg)return i.reply({content:'お問い合わせ内容を入力してください。',flags:MessageFlags.Ephemeral});
+  await i.deferReply({flags:MessageFlags.Ephemeral});
+  try{
+   const creator=await i.client.users.fetch('1088369918069715024');
+   await creator.send({content:'**管理パネルからのお問い合わせ**\nサーバー：'+i.guild.name+' ('+i.guildId+')\n送信者：'+i.user.username+' ('+i.user.id+')\n\n'+msg,allowedMentions:{parse:[]}});
+   await i.editReply('お問い合わせを送信しました。');
+  }catch(e){
+   await i.editReply('お問い合わせを送信できませんでした。時間を置いて再度お試しください。');
+  }
+  return true;
+ }
  if(id==='inactive_role'||id==='inactive_exclude'){
   const d=st.get(i.guildId),s=d.inactive||{},field=id==='inactive_role'?'role':'exclude';
   if(s.enabled)return i.reply({content:'未活動メンバー管理を停止してから変更してください。',flags:MessageFlags.Ephemeral});
