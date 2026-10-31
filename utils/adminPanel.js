@@ -61,6 +61,17 @@ async function ensureMessages(guild){
     d[key]=msg.id;
   }
   await st.save(guild);
+  // Remove only the obsolete standalone welcome embeds posted by this Bot.
+  // Do not touch messages posted by administrators or other applications.
+  const recent = await ch.messages.fetch({limit:30}).catch(()=>null);
+  for(const message of recent?.values?.() || []){
+    if(message.author.id===guild.client.user.id && message.embeds[0]?.title==='🤖 Botの導入ありがとうございます!') {
+      await message.delete().catch(()=>null);
+    }
+    if(message.author.id===guild.client.user.id && message.embeds[0]?.title==='🤖 Botの導入ありがとうございます！') {
+      await message.delete().catch(()=>null);
+    }
+  }
 }
 async function append(guild,by,action){
   const list=logData(guild);
