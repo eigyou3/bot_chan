@@ -42,7 +42,7 @@ async function handle(i,client){
     const modal=new ModalBuilder().setCustomId('ann_mdl_'+i.id).setTitle('アナウンス内容の入力');
     modal.addLabelComponents(
       new LabelBuilder().setLabel('案内文章').setTextInputComponent(new TextInputBuilder().setCustomId('announce_text').setStyle(TextInputStyle.Paragraph).setRequired(true)),
-      new LabelBuilder().setLabel('画像（任意）').setFileUploadComponent(new FileUploadBuilder().setCustomId('announce_img').setRequired(false).setMaxValues(1)));
+      new LabelBuilder().setLabel('画像（任意）').setFileUploadComponent(new FileUploadBuilder().setCustomId('announce_img').setRequired(false).setMaxValues(10)));
     await i.showModal(modal);
   }
 }
