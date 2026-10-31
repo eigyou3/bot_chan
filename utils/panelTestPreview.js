@@ -2,8 +2,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags,
   StringSelectMenuBuilder, ContainerBuilder, TextDisplayBuilder } = require('discord.js');
 const ROOT='pt_';
 const testGuild='1341988738074542111';
-const states=['pending','on','off'];
-const layouts=['select','buttons'];
+const { isGI } = require('./gi');
 const button=(id,label,style=ButtonStyle.Secondary)=>new ButtonBuilder().setCustomId(ROOT+id).setLabel(label).setStyle(style);
 const row=(...items)=>new ActionRowBuilder().addComponents(...items);
 const screen={
@@ -39,39 +38,24 @@ function select(id,placeholder,items) {
  return new StringSelectMenuBuilder().setCustomId(ROOT+id).setPlaceholder(placeholder)
   .addOptions(items.map(([value,label,description])=>({value,label,...(description?{description}:{})})));
 }
-function render(page='home',mode='pending',layout='select'){
- if(!states.includes(mode))mode='pending';
- if(!layouts.includes(layout))layout='select';
+function render(page='home',mode='pending') {
  if(!screen[page])page='home';
  const container=new ContainerBuilder().addTextDisplayComponents(
   new TextDisplayBuilder().setContent(page==='home'?'## ⚙️ Bot 管理パネル':'## '+screen[page][0])
  );
  if(page==='home'){
   if(mode==='pending'){
-   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**原神サーバーとして利用しますか？**\n-# 初回のみの選択です。設定は保存されません。'));
-   container.addActionRowComponents(row(button('mode_on_'+layout,'原神設定：ON',ButtonStyle.Success),button('mode_off_'+layout,'原神設定：OFF',ButtonStyle.Danger)));
+   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**原神サーバーとして利用しますか？**'));
+   container.addActionRowComponents(row(button('gen_on','原神設定：ON',ButtonStyle.Success),button('gen_off','原神設定：OFF',ButtonStyle.Danger)));
   }
-  if(layout==='select'){
-   container.addActionRowComponents(row(select('pick_'+mode+'_'+layout,'機能を選択してください',choices(mode))));
-  }else{
-   container.addActionRowComponents(row(
-     button('go_'+mode+'_'+layout+'_announce','📢 アナウンスを作る',ButtonStyle.Primary),
-     button('go_'+mode+'_'+layout+'_notifications','🛎️ 通知設定',ButtonStyle.Primary),
-     ...(mode==='on'?[button('go_on_buttons_genshin','🎮 原神設定',ButtonStyle.Primary)]:[])
-   ));
-   container.addActionRowComponents(row(button('go_'+mode+'_'+layout+'_analytics','📊 サーバー分析'),button('go_'+mode+'_'+layout+'_members','👥 メンバー管理')));
-   container.addActionRowComponents(row(button('go_'+mode+'_'+layout+'_contact','🗨️ お問い合わせ'),...(mode==='off'?[button('go_off_buttons_enable','🎮 原神を有効化')]:[])));
-   container.addActionRowComponents(row(button('go_'+mode+'_'+layout+'_reset','すべての設定を初期化',ButtonStyle.Danger)));
-  }
-  container.addActionRowComponents(row(button('layout_'+mode+'_'+layout,layout==='select'?'ボタン形式を比較':'メニュー形式を比較')));
-  container.addTextDisplayComponents(new TextDisplayBuilder().setContent('-# 表示確認用 · 原神：'+({pending:'初回未選択',on:'ON',off:'OFF'}[mode])+' · 実際の設定は変更されません。'));
-  if(mode!=='pending')container.addActionRowComponents(row(button('cycle_'+mode+'_'+layout,'原神の表示状態を切り替える')));
+  container.addActionRowComponents(row(select('pick','機能を選択してください',choices(mode))));
+
  }else{
   container.addTextDisplayComponents(new TextDisplayBuilder().setContent(screen[page][1]));
   const next=page==='notifications'?[['vc','🔊 VC参加通知'],['ranking','🏆 VCランキング'],['bump','🔔 Bump通知']]:
     page==='members'?[['inactive','非アクティブ管理']]:[];
-  if(next.length)container.addActionRowComponents(row(select('sub_'+mode+'_'+layout,'設定項目を選択',next)));
-  container.addActionRowComponents(row(button('go_'+mode+'_'+layout+'_'+back(page),'← 戻る')));
+  if(next.length)container.addActionRowComponents(row(select('sub','設定項目を選択',next)));
+  container.addActionRowComponents(row(button('back_'+back(page),'← 戻る')));
  }
  return {components:[container],flags:MessageFlags.IsComponentsV2,allowedMentions:{parse:[]}};
 }
@@ -81,13 +65,13 @@ async function handle(i){
   await i.reply({content:'このテストは指定サーバーの所有者専用です。',flags:MessageFlags.Ephemeral});return true;
  }
  const id=i.customId.slice(ROOT.length);
- let mode='pending',layout='select',page='home';
- let m;
- if((m=id.match(/^mode_(on|off)_(select|buttons)$/)))mode=m[1],layout=m[2];
- else if((m=id.match(/^cycle_(pending|on|off)_(select|buttons)$/)))mode=({pending:'on',on:'off',off:'pending'})[m[1]],layout=m[2];
- else if((m=id.match(/^layout_(pending|on|off)_(select|buttons)$/)))mode=m[1],layout=m[2]==='select'?'buttons':'select';
- else if((m=id.match(/^go_(pending|on|off)_(select|buttons)_(\w+)$/)))mode=m[1],layout=m[2],page=m[3];
- else if((m=id.match(/^(?:pick|sub)_(pending|on|off)_(select|buttons)$/)))mode=m[1],layout=m[2],page=i.values?.[0]||'home';
- await i.update(render(page,mode,layout));return true;
+ const mode=isGI(i.guildId)?'on':'pending';
+ if(id==='gen_on'||id==='gen_off'){
+  await i.reply({content:'現在のテストでは原神の登録状態を変更しません。',flags:MessageFlags.Ephemeral});return true;
+ }
+ let page='home';
+ if(id==='pick'||id==='sub')page=i.values?.[0]||'home';
+ else if(id.startsWith('back_'))page=id.slice(5);
+ await i.update(render(page,mode));return true;
 }
 module.exports={render,handle};
