@@ -176,20 +176,21 @@ module.exports = {
 
         // 画像があれば落として付け直す（CDNのURLは期限切れになるので）
         const files = [];
-        const up = interaction.fields.getUploadedFiles('announce_img')?.first();
-        if (up && /^image\//.test(up.contentType || '')) {
-          const b = await fetch(up.url).then(r => r.arrayBuffer()).catch(() => null);
-          if (b) {
-            const nm = `ann.${(up.name.split('.').pop() || 'png').toLowerCase()}`;
-            files.push(new AttachmentBuilder(Buffer.from(b), { name: nm }));
-            embed.setImage(`attachment://${nm}`);
-          }
+        const uploads = [...(interaction.fields.getUploadedFiles('announce_img')?.values() || [])].slice(0, 10);
+        for (const [n, up] of uploads.entries()) {
+          if (!(up.contentType || '').startsWith('image/')) continue;
+          const bytes = await fetch(up.url).then(r => r.arrayBuffer()).catch(() => null);
+          if (!bytes) continue;
+          const ext = (up.name.split('.').pop() || 'png').toLowerCase();
+          const name = `ann-${n + 1}.${ext}`;
+          files.push(new AttachmentBuilder(Buffer.from(bytes), {name}));
+          if (files.length === 1) embed.setImage(`attachment://${name}`);
         }
 
         const target = p.ch ? await interaction.guild.channels.fetch(p.ch).catch(() => null) : interaction.channel;
         if (!target?.send) return interaction.editReply(box('投稿先チャンネルが見つかりません。'));
         const msg = await target.send({ embeds: [embed], components: annRows(interaction.guild, p.ids), files });
-        if (up && !files.length) await interaction.editReply(box('⚠️ 画像を読み込めなかったため、文章だけ送信しました。'));
+        if (uploads.length && files.length !== uploads.length) await interaction.editReply(box('⚠️ 画像を読み込めなかったため、文章だけ送信しました。'));
         else await interaction.deleteReply();
 
         if (p.sticky) {
