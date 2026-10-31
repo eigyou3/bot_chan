@@ -85,12 +85,13 @@ async function append(guild,by,action){
   if(message) await message.edit(logsPage(guild));
 }
 async function handle(i,client){
-  if(!(i.isButton() || i.isChannelSelectMenu() || i.isRoleSelectMenu() || i.isStringSelectMenu()) || !i.customId.startsWith(PREFIX)) return false;
+  if(!(i.isButton() || i.isChannelSelectMenu() || i.isRoleSelectMenu() || i.isStringSelectMenu() || i.isModalSubmit()) || !i.customId.startsWith(PREFIX)) return false;
   if(!allowed(i)) {await i.reply({content:'この操作は #bot-config のサーバー管理者専用です。',flags:MessageFlags.Ephemeral});return true;}
   const id=i.customId.slice(PREFIX.length);
+  if(['vcrmenu','vcron','vcroff','alarmmenu','alarmchannel','alarmselected','alarmremove','alarmdelete'].includes(id)||id.startsWith('alarmform_')){await require('./panelActivity').handle(i);return true;}
   if(id==='activity'){
     const cfg=st.get(i.guildId),n=cfg.inactive?.months||cfg.inactiveMonths||3;
-    await i.reply({content:'**📊 活動管理**\\n非アクティブ判定：'+n+'か月\\n自動キック：'+(cfg.inactive?.enabled?'ON':'OFF')+'\\n判定期間を変更すると、その日からあらためて経過期間を数えます。',components:[row(btn('inactivemonths','判定月数を設定'))],flags:MessageFlags.Ephemeral});return true;
+    await i.reply({content:'**📊 活動管理**\\n非アクティブ判定：'+n+'か月\\n自動キック：'+(cfg.inactive?.enabled?'ON':'OFF')+'\\n判定期間を変更すると、その日からあらためて経過期間を数えます。',components:[row(btn('vcrmenu','VCランキング'),btn('alarmmenu','アラーム')),row(btn('inactivemonths','非アクティブ判定月数'))],flags:MessageFlags.Ephemeral});return true;
   }
   if(id==='inactivemonths'){
     await i.reply({content:'何か月間活動がなければ参加意思を確認するか選択してください。',components:[row(new StringSelectMenuBuilder().setCustomId(PREFIX+'select_months').setPlaceholder('月数を選択')
