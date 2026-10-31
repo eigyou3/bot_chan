@@ -24,6 +24,15 @@ module.exports = {
       return;
     }
 
+    if (interaction.isButton() && interaction.customId?.startsWith('pt_')) {
+      try { await require('../utils/panelTestPreview').handle(interaction); }
+      catch (error) {
+        console.error('パネルプレビューエラー:', error);
+        if (!interaction.deferred && !interaction.replied) await interaction.reply({content:'プレビューを表示できませんでした。',ephemeral:true}).catch(()=>null);
+      }
+      return;
+    }
+
     if (interaction.isButton() && interaction.customId?.startsWith('ia_')) {
       try { await inactive.handleButton(interaction, client); } catch (e) {
         console.error('参加意思確認エラー:', e);
