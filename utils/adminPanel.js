@@ -87,9 +87,10 @@ async function handle(i,client){
   if(!(i.isButton() || i.isChannelSelectMenu() || i.isRoleSelectMenu()) || !i.customId.startsWith(PREFIX)) return false;
   if(!allowed(i)) {await i.reply({content:'この操作は #bot-config のサーバー管理者専用です。',flags:MessageFlags.Ephemeral});return true;}
   const id=i.customId.slice(PREFIX.length);
+  if(id.startsWith('ann')){await require('./panelAnnounce').handle(i,client);return true;}
   if(id==='notifications'){
     const d=st.get(i.guildId);
-    await i.reply({content:'**🔔 通知設定**\\nVC通知先：'+(d.vc?'<#'+d.vc+'>':'未設定')+'\\nアナウンスは投稿先を選んで作成できます。',components:[row(btn('vcchannel','VC通知先を設定'),btn('annchannel','アナウンス投稿先を設定'))],flags:MessageFlags.Ephemeral});return true;
+    await i.reply({content:'**🔔 通知設定**\\nVC通知先：'+(d.vc?'<#'+d.vc+'>':'未設定')+'\\nアナウンスは投稿先を選んで作成できます。',components:[row(btn('vcchannel','VC通知先を設定'),btn('annopen','アナウンス作成'))],flags:MessageFlags.Ephemeral});return true;
   }
   if(id==='vcchannel' || id==='annchannel'){
     await i.reply({content:'テキストチャンネルを選んでください。',components:[row(new ChannelSelectMenuBuilder().setCustomId(PREFIX+'select_'+(id==='vcchannel'?'vc':'annchannel')).setPlaceholder('通知先チャンネル').addChannelTypes(ChannelType.GuildText))],flags:MessageFlags.Ephemeral});return true;
