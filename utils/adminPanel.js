@@ -1,4 +1,4 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits: P, MessageFlags, ChannelSelectMenuBuilder, RoleSelectMenuBuilder, ChannelType } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits: P, MessageFlags, ChannelSelectMenuBuilder, RoleSelectMenuBuilder, ChannelType, StringSelectMenuBuilder } = require('discord.js');
 const st = require('./store');
 const { syncGuild } = require('./registerCommands');
 
@@ -30,7 +30,8 @@ const panel = guild => {
       ].join('\n'))],
     components:[
       row(btn('genshin','原神サーバーに登録',ButtonStyle.Success,gi),btn('genshinmenu','原神設定',ButtonStyle.Primary)),
-      row(btn('notifications','通知設定',ButtonStyle.Primary),btn('reset','管理パネルを初期化',ButtonStyle.Danger))
+      row(btn('notifications','通知設定',ButtonStyle.Primary),btn('activity','活動管理',ButtonStyle.Primary)),
+      row(btn('reset','管理パネルを初期化',ButtonStyle.Danger))
     ],
     allowedMentions:{parse:[]}
   };
@@ -84,9 +85,26 @@ async function append(guild,by,action){
   if(message) await message.edit(logsPage(guild));
 }
 async function handle(i,client){
-  if(!(i.isButton() || i.isChannelSelectMenu() || i.isRoleSelectMenu()) || !i.customId.startsWith(PREFIX)) return false;
+  if(!(i.isButton() || i.isChannelSelectMenu() || i.isRoleSelectMenu() || i.isStringSelectMenu()) || !i.customId.startsWith(PREFIX)) return false;
   if(!allowed(i)) {await i.reply({content:'この操作は #bot-config のサーバー管理者専用です。',flags:MessageFlags.Ephemeral});return true;}
   const id=i.customId.slice(PREFIX.length);
+  if(id==='activity'){
+    const cfg=st.get(i.guildId),n=cfg.inactive?.months||cfg.inactiveMonths||3;
+    await i.reply({content:'**📊 活動管理**\\n非アクティブ判定：'+n+'か月\\n自動キック：'+(cfg.inactive?.enabled?'ON':'OFF')+'\\n判定期間を変更すると、その日からあらためて経過期間を数えます。',components:[row(btn('inactivemonths','判定月数を設定'))],flags:MessageFlags.Ephemeral});return true;
+  }
+  if(id==='inactivemonths'){
+    await i.reply({content:'何か月間活動がなければ参加意思を確認するか選択してください。',components:[row(new StringSelectMenuBuilder().setCustomId(PREFIX+'select_months').setPlaceholder('月数を選択')
+      .addOptions(Array.from({length:12},(_,n)=>({label:(n+1)+'か月',value:String(n+1)}))))],flags:MessageFlags.Ephemeral});return true;
+  }
+  if(id==='select_months'){
+    const months=Number(i.values?.[0]);
+    if(!Number.isInteger(months)||months<1||months>12)return i.reply({content:'正しい月数を選んでください。',flags:MessageFlags.Ephemeral});
+    const d=st.get(i.guildId);d.inactiveMonths=months;
+    if(d.inactive){d.inactive.months=months;d.inactive.since=Date.now();}
+    if(!await st.save(i.guild))return i.reply({content:'設定を保存できませんでした。',flags:MessageFlags.Ephemeral});
+    await append(i.guild,i.user.id,'非アクティブ管理の判定期間を'+months+'か月に変更');
+    await i.update({content:'✅ 判定期間を'+months+'か月に設定しました。既存の設定を有効にしている場合、判定期間は今日から再計算します。',components:[]});return true;
+  }
   if(id==='permhide'){await require('./permissionChecklist').hide(i);return true;}
   if(id.startsWith('ann')){await require('./panelAnnounce').handle(i,client);return true;}
   if(id==='notifications'){
