@@ -3,6 +3,7 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags,
 const ROOT='pt_';
 const testGuild='1341988738074542111';
 const { isGI } = require('./gi');
+const st = require('./store');
 const button=(id,label,style=ButtonStyle.Secondary)=>new ButtonBuilder().setCustomId(ROOT+id).setLabel(label).setStyle(style);
 const row=(...items)=>new ActionRowBuilder().addComponents(...items);
 const screen={
@@ -38,7 +39,7 @@ function select(id,placeholder,items) {
  return new StringSelectMenuBuilder().setCustomId(ROOT+id).setPlaceholder(placeholder)
   .addOptions(items.map(([value,label,description])=>({value,label,...(description?{description}:{})})));
 }
-function render(page='home',mode='pending') {
+function render(page='home',mode='pending',guildId=null) {
  if(!screen[page])page='home';
  const container=new ContainerBuilder().addTextDisplayComponents(
   new TextDisplayBuilder().setContent(page==='home'?'## ⚙️ Bot 管理パネル':'## '+screen[page][0])
@@ -51,8 +52,12 @@ function render(page='home',mode='pending') {
   container.addActionRowComponents(row(select('pick','機能を選択してください',choices(mode))));
 
  }else{
-  container.addTextDisplayComponents(new TextDisplayBuilder().setContent(screen[page][1]));
-  const next=page==='notifications'?[['vc','🔊 VC参加通知'],['ranking','🏆 VCランキング'],['bump','🔔 Bump通知']]:
+  if(page==='notifications'){
+   const d=guildId ? st.get(guildId) : {};
+   const target=d.vc ? '<#'+d.vc+'>' : '未設定';
+   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**VC参加通知**\n-# 通知先：'+target+'\n\n**VCランキング**\n-# 集計とランキング投稿の管理\n\n**Bump通知**\n-# リマインドと通知先の管理'));
+  }else container.addTextDisplayComponents(new TextDisplayBuilder().setContent(screen[page][1]));
+  const next=page==='notifications'?[['vc','🔊 VC参加通知','参加通知を送るチャンネル'],['ranking','🏆 VCランキング','ランキングのON/OFF・投稿先'],['bump','🔔 Bump通知','通知先・リマインド設定']]:
     page==='members'?[['inactive','非アクティブ管理']]:[];
   if(next.length)container.addActionRowComponents(row(select('sub','設定項目を選択',next)));
   container.addActionRowComponents(row(button('back_'+back(page),'← 戻る')));
@@ -72,6 +77,6 @@ async function handle(i){
  let page='home';
  if(id==='pick'||id==='sub')page=i.values?.[0]||'home';
  else if(id.startsWith('back_'))page=id.slice(5);
- await i.update(render(page,mode));return true;
+ await i.update(render(page,mode,i.guildId));return true;
 }
 module.exports={render,handle};
