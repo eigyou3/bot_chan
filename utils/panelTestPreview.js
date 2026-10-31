@@ -18,6 +18,20 @@ const screen={
  genshin:['🎮 原神設定','原神通知・UID登録・ビルドカード・ギフトコード（プレビューのみ）'],
  enable:['🎮 原神機能を有効化','後から原神サーバーとして利用できます。（テスト中は変更不可）'],
  contact:['🗨️ お問い合わせ','制作者へのお問い合わせ（テスト中は送信不可）'],
+ uid:['UID登録','登録パネルの表示先と、必要な場合だけ付与するロールを設定します。'],
+ build:['ビルドカード','ビルドカードの常駐パネルを置くチャンネルを選択します。'],
+ gift:['ギフトコード','ギフトコードを案内するチャンネルを選択します。'],
+ gnews:['原神のお知らせ','お知らせの表示先と通知ロールを選択します。'],
+ annchannel:['投稿先','アナウンスの投稿先を選択します。'],
+ annroles:['ロール設定','通知・付与するロールを選択します。'],
+ anncontent:['本文・画像','本文を入力し、必要に応じて画像を添付します。'],
+ annsticky:['常駐設定','投稿を常駐させるか選択します。'],
+ inmonths:['判定期間','1〜12か月から活動がない期間を選択します。'],
+ inrole:['対象ロール','活動状況を確認する対象ロールを設定します。'],
+ inexclude:['除外ロール','非アクティブ管理から除外するロールを設定します。'],
+ inon:['有効化・停止','非アクティブ管理の有効化・停止を設定します。'],
+ analyticsmembers:['メンバー分析','人数・加入・退出の履歴と期間比較を表示します。'],
+ analyticsvc:['VC分析','通話回数・通話時間の履歴と期間比較を表示します。'],
  reset:['すべての設定を初期化','UID情報・分析履歴・管理ログも削除され、取り消せません。\n原神の常駐パネルや通知も停止します。\n\nテスト中は初期化できません。']
 };
 function choices(mode){
@@ -33,7 +47,7 @@ function choices(mode){
  ];
 }
 function back(page){
- return ['vc','ranking','bump'].includes(page)?'notifications':page==='inactive'?'members':'home';
+ return ['vc','ranking','bump'].includes(page)?'notifications':(['uid','build','gift','gnews'].includes(page)?'genshin':(['annchannel','annroles','anncontent','annsticky'].includes(page)?'announce':(['inmonths','inrole','inexclude','inon'].includes(page)?'inactive':(['analyticsmembers','analyticsvc'].includes(page)?'analytics':page==='inactive'?'members':'home'))));
 }
 function select(id,placeholder,items) {
  return new StringSelectMenuBuilder().setCustomId(ROOT+id).setPlaceholder(placeholder)
@@ -65,7 +79,11 @@ function render(page='home',mode='pending',guildId=null) {
    container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**Bump通知**\nリマインドの通知先と通知方法を設定します。\n\n-# 本番では設定を変更できます。'));
   }else container.addTextDisplayComponents(new TextDisplayBuilder().setContent(screen[page][1]));
   const next=page==='notifications'?[['vc','🔊 VC参加通知','参加通知を送るチャンネル'],['ranking','🏆 VCランキング','ランキングのON/OFF・投稿先'],['bump','🔔 Bump通知','通知先・リマインド設定']]:
-    page==='members'?[['inactive','非アクティブ管理']]:[];
+    page==='members'?[['inactive','非アクティブ管理','活動状況と対象者の管理']]:
+    page==='genshin'?[['uid','UID登録','登録先と任意の付与ロール'],['build','ビルドカード','パネルの表示先'],['gift','ギフトコード','表示先'],['gnews','原神のお知らせ','表示先と通知ロール']]:
+    page==='announce'?[['annchannel','投稿先','チャンネルを選ぶ'],['annroles','ロール設定','通知ロールを選ぶ'],['anncontent','本文・画像','本文と画像を用意'],['annsticky','常駐設定','ON/OFF']]:
+    page==='inactive'?[['inmonths','判定期間','1〜12か月'],['inrole','対象ロール','管理対象を指定'],['inexclude','除外ロール','対象外にするロール'],['inon','有効化・停止','7日間の確認猶予']]:
+    page==='analytics'?[['analyticsmembers','メンバー分析','人数・加入・退出'],['analyticsvc','VC分析','通話回数・時間']]:[];
   if(next.length)container.addActionRowComponents(row(select('sub','設定項目を選択',next)));
   container.addActionRowComponents(row(button('back_'+back(page),'← 戻る')));
  }
