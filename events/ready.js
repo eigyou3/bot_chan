@@ -9,6 +9,7 @@ const inactive = require('../utils/inactive');
 const { syncAll } = require('../utils/registerCommands');
 const adminPanel = require('../utils/adminPanel');
 const permissions = require('../utils/permissionChecklist');
+const analytics = require('../utils/analyticsCollector');
 const { ensureConfig } = require('../utils/setup');
 
 module.exports = {
@@ -36,6 +37,8 @@ module.exports = {
     setInterval(async()=>{
       for(const guild of client.guilds.cache.values()) await permissions.refresh(guild).catch(e=>console.warn('権限チェック更新失敗:',guild.id,e.message));
     }, 60000);
+    analytics.initialize(client);
+    setInterval(()=>analytics.tick(client),60000);
     await vr.init(client).catch(e => console.error('VC集計の初期化エラー:', e.message));
     await inactive.tick(client);
     setInterval(() => inactive.tick(client), 5 * 60000);
