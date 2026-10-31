@@ -4,7 +4,7 @@ const { isAdmin, deny } = require('../utils/perm');
 const { eligible, managedRole, restoreSuspended } = require('../utils/inactive');
 
 module.exports = {
-  data: new SlashCommandBuilder().setName('inactive').setDescription('3か月活動なしの参加意思確認と自動キックを管理します').setContexts(InteractionContextType.Guild)
+  data: new SlashCommandBuilder().setName('inactive').setDescription('${d.inactive.months || 3}か月活動なしの参加意思確認と自動キックを管理します').setContexts(InteractionContextType.Guild)
     .addSubcommand(c => c.setName('enable').setDescription('発言・VC参加の監視と警告つき自動キックを有効化')
       .addChannelOption(o => o.setName('log').setDescription('管理者が確認するログ送信先').addChannelTypes(ChannelType.GuildText).setRequired(true))
       .addRoleOption(o => o.setName('role').setDescription('警告時に外し、参加継続時に必ず付与するロール').setRequired(true))
@@ -38,9 +38,9 @@ module.exports = {
       if (previous && Object.values(previous.users).some(u => u.suspendedRole || u.restoreRole)) return i.editReply('⚠️ まだ指定ロールを外している人がいます。ロールだけの変更は `/inactive role`、停止してロールを戻す場合は `/inactive disable` を使用してください。');
       const wasEnabled = previous?.enabled;
       if (previous) previous.enabled = false;
-      d.inactive = { enabled: true, since: now, seenAt: now, checkedAt: 0, log: ch.id, role: role.id, exclude: i.options.getRole('exclude')?.id || null, users: {} };
+      d.inactive = { enabled: true, since: now, seenAt: now, checkedAt: 0, log: ch.id, role: role.id, exclude: i.options.getRole('exclude')?.id || null, months: d.inactiveMonths || previous?.months || 3, users: {} };
       if (!await st.save(i.guild)) { d.inactive = previous; if (previous) previous.enabled = wasEnabled; return i.editReply('⚠️ 設定を保存できなかったため、新しい設定は有効化していません。#bot-config を確認してください。'); }
-      return i.editReply({ embeds: [new EmbedBuilder().setColor('#BA7517').setTitle('非アクティブ管理を有効化しました').setDescription(`今日から記録を開始します。\n指定ロール：<@&${role.id}>（警告時に解除／参加継続時は元の所持に関係なく付与）\n**3か月発言・VC参加なし → 参加意思確認の警告DM**\n「参加を続ける」でキック予定を解除し、押した日から3か月を数え直します。\n「退出する」は再確認してからキックします。\n操作も活動もなければ、警告DMから7日後にキックします。\n発言・VC参加があれば警告は解除されます。\nDMを送れない人はキックしません。\nBot・サーバー所有者・管理者・Bot管理者${d.inactive.exclude ? `・<@&${d.inactive.exclude}>` : ''}は対象外です。\nBotが閲覧できる場所の活動だけが記録対象です。\nBotが15分以上停止した場合、判定期間をリセットします。\nログ：<#${ch.id}>\n再度 enable を実行すると、全員の判定期間を今日から数え直します。`)], allowedMentions: { parse: [] } });
+      return i.editReply({ embeds: [new EmbedBuilder().setColor('#BA7517').setTitle('非アクティブ管理を有効化しました').setDescription(`今日から記録を開始します。\n指定ロール：<@&${role.id}>（警告時に解除／参加継続時は元の所持に関係なく付与）\n**${s.months || 3}か月発言・VC参加なし → 参加意思確認の警告DM**\n「参加を続ける」でキック予定を解除し、押した日から3か月を数え直します。\n「退出する」は再確認してからキックします。\n操作も活動もなければ、警告DMから7日後にキックします。\n発言・VC参加があれば警告は解除されます。\nDMを送れない人はキックしません。\nBot・サーバー所有者・管理者・Bot管理者${d.inactive.exclude ? `・<@&${d.inactive.exclude}>` : ''}は対象外です。\nBotが閲覧できる場所の活動だけが記録対象です。\nBotが15分以上停止した場合、判定期間をリセットします。\nログ：<#${ch.id}>\n再度 enable を実行すると、全員の判定期間を今日から数え直します。`)], allowedMentions: { parse: [] } });
     }
     const s = d.inactive;
     const roleLabel = s?.role ? `<@&${s.role}>` : "未設定";
