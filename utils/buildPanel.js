@@ -12,6 +12,16 @@ const box = t => new EmbedBuilder().setColor('#8A8A8A').setDescription(t);
 const button = (id, label, style = ButtonStyle.Secondary) => new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style);
 const row = (...items) => new ActionRowBuilder().addComponents(...items);
 const author = s => ({ name: `${s.name}${i18n.t(s.locale,'card')}`, iconURL: s.avatar });
+const localizedFormula = (formula, locale) => {
+  if (i18n.language(locale) === 'ja') return formula;
+  const terms = {
+    '元素チャージ効率': 'er', '会心ダメージ': 'cd', '会心率': 'cr',
+    '元素熟知': 'em', '攻撃力実数': 'atk', '防御力実数': 'def',
+    'HP実数': 'hp', '攻撃力': 'atk', '防御力': 'def',
+  };
+  return Object.entries(terms).reduce((text, [ja, key]) =>
+    text.split(ja).join(i18n.t(locale, key)), formula);
+};
 const owner = s => `<@${s.user}> ${i18n.t(s.locale,'owned')}`;
 
 function panel(locale = 'ja') {
@@ -39,7 +49,7 @@ async function start(i) {
   await i.deferReply();
   await place(i.channel, true);
   const saved = await st.save(i.guild);
-  if (!saved) return i.editReply('⚠️ 案内を設置しましたが設定を保存できませんでした。#bot-config とBotの権限を確認してください。');
+  if (!saved) return i.editReply('⚠️ '+i18n.t(i.locale,'notSaved'));
   return i.deleteReply();
 }
 
@@ -66,13 +76,13 @@ async function refresh(i, s) {
   }
   const d = await require('./character').build(a, s.uid, s.base, s.score, s.locale);
   s.buf = await require('./charCard').charCard(d, s.locale);
-  s.caption = `## ${d.name}${i18n.t(s.locale,'card')}\n${s.score && !a.lim ? `${i18n.t(s.locale,'basis')}：${i18n.basis(s.locale,s.base)}\n\`${art.FORMULAS[s.base]}\`\n${i18n.t(s.locale,'sub')}` : i18n.t(s.locale,'disabled')}${a.lim ? '\n'+i18n.t(s.locale,'limited') : ''}`;
+  s.caption = `## ${d.name}${i18n.t(s.locale,'card')}\n${s.score && !a.lim ? `${i18n.t(s.locale,'basis')}：${i18n.basis(s.locale,s.base)}\n\`${localizedFormula(art.FORMULAS[s.base],s.locale)}\`\n${i18n.t(s.locale,'sub')}` : i18n.t(s.locale,'disabled')}${a.lim ? '\n'+i18n.t(s.locale,'limited') : ''}`;
   s.embed = box(s.caption).setAuthor(author(s)).setImage('attachment://build-card.png');
   return i.editReply({ content: owner(s), allowedMentions: { parse: [] }, embeds: [s.embed], attachments: [], files: [new AttachmentBuilder(s.buf, { name: 'build-card.png' })], components: controls(s) });
 }
 
 async function handle(i) {
-  if (!isGI(i.guildId)) return i.reply({ content: 'このサーバーでは使用できません。', ephemeral: true });
+  if (!isGI(i.guildId)) return i.reply({ content: i18n.t(i.locale,'notAllowed'), ephemeral: true });
   // 放置した画面の画像バッファは解放する。
   for (const [id, s] of sessions) if (Date.now() - s.at > TTL) sessions.delete(id);
   if (i.customId.startsWith('bc_open_')) {
