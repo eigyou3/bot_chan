@@ -7,6 +7,10 @@ const bump = require('../utils/bump');
 const alarm = require('../utils/alarm');
 const inactive = require('../utils/inactive');
 const { syncAll } = require('../utils/registerCommands');
+const adminPanel = require('../utils/adminPanel');
+const permissions = require('../utils/permissionChecklist');
+const analytics = require('../utils/analyticsCollector');
+const { ensureConfig } = require('../utils/setup');
 
 module.exports = {
   name: 'clientReady',
@@ -16,6 +20,13 @@ module.exports = {
 
     // 設定を先に戻し、登録済み原神サーバーのコマンドも復元する。
     await st.loadAll(client);
+    for (const guild of client.guilds.cache.values()) {
+      try {
+        if (!st.findCh(guild)) await ensureConfig(guild);
+        await adminPanel.ensureMessages(guild);
+        await permissions.refresh(guild);
+      } catch(e) { console.warn('管理パネル展開失敗:',guild.id,e.message); }
+    }
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     try {
       await syncAll(client, rest);
@@ -23,6 +34,11 @@ module.exports = {
       console.error('コマンド登録エラー:', e);
     }
 
+    setInterval(async()=>{
+      for(const guild of client.guilds.cache.values()) await permissions.refresh(guild).catch(e=>console.warn('権限チェック更新失敗:',guild.id,e.message));
+    }, 60000);
+    analytics.initialize(client);
+    setInterval(()=>analytics.tick(client),60000);
     await vr.init(client).catch(e => console.error('VC集計の初期化エラー:', e.message));
     await inactive.tick(client);
     setInterval(() => inactive.tick(client), 5 * 60000);

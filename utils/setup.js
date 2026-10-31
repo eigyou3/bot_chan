@@ -5,7 +5,7 @@ async function ensureConfig(guild) {
   const me = guild.members.me || await guild.members.fetchMe();
   let ch = st.findCh(guild);
   if (!ch) {
-    if (!me.permissions.has(P.ManageChannels)) throw new Error('Botに「チャンネルの管理」権限を付けて /setup を再実行してください。または #bot-config を手動で作成してください。');
+    if (!me.permissions.has(P.ManageChannels)) throw new Error('Botに「チャンネルの管理」権限を付けて再導入してください。または #bot-config を手動で作成してください。');
     const adminRoles = [...guild.roles.cache.values()].filter(role =>
       role.id !== guild.roles.everyone.id && role.permissions.has(P.Administrator));
     ch = await guild.channels.create({

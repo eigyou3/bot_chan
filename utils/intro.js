@@ -20,7 +20,10 @@ function panel(roleId) {
 // 案内を置く（前のは消す）
 async function place(ch, roleId) {
   const d = st.get(ch.guildId);
-  if (d.introP?.msg) await ch.messages.delete(d.introP.msg).catch(() => null);
+  if (d.introP?.msg) {
+    const previous = await ch.guild.channels.fetch(d.introP.ch).catch(() => null);
+    if(previous) await previous.messages.delete(d.introP.msg).catch(() => null);
+  }
   const m = await ch.send({ ...panel(roleId), flags: MessageFlags.SuppressNotifications });
   d.introP = { ch: ch.id, msg: m.id, role: roleId };
   st.saveLater(ch.guild, 3000);

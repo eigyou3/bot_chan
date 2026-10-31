@@ -10,6 +10,7 @@ const dict = require('../utils/dict');
 const off = require('../utils/off');
 const gn = require('../utils/gnews');
 const inactive = require('../utils/inactive');
+const adminPanel = require('../utils/adminPanel');
 
 module.exports = {
   name: 'interactionCreate',
@@ -17,10 +18,20 @@ module.exports = {
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
-      if (interaction.guild && !['setup', 'setgenshin', 'help', 'servers'].includes(interaction.commandName) && !st.findCh(interaction.guild)) {
-        return interaction.reply({ content: '⚠️ このBotは設定保存用の #bot-config が必要です。サーバー管理者が `/setup` を実行してください。原神サーバーとして登録する場合は `/setgenshin` でも準備できます。使い方は `/help`。', allowedMentions: { parse: [] } });
+      if (interaction.guild && !['help', 'servers'].includes(interaction.commandName) && !st.findCh(interaction.guild)) {
+        return interaction.reply({ content: '⚠️ このBotは設定保存用の #bot-config が必要です。Bot導入時に自動作成されます。作成されていない場合はサーバー管理者にBotの「チャンネルの管理」権限を確認してもらってください。使い方は `/help`。', allowedMentions: { parse: [] } });
       }
       try { await command.execute(interaction, client); } catch (error) { console.error(error); }
+      return;
+    }
+
+    if ((interaction.isButton() || interaction.isChannelSelectMenu() || interaction.isRoleSelectMenu() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) && interaction.customId?.startsWith('cfg_')) {
+      try { await adminPanel.handle(interaction, client); } catch (e) {
+        console.error('管理パネルエラー:', e);
+        const msg = {content:'管理パネルの操作に失敗しました。',components:[]};
+        if(interaction.deferred || interaction.replied) await interaction.editReply(msg).catch(()=>null);
+        else await interaction.reply({...msg,ephemeral:true}).catch(()=>null);
+      }
       return;
     }
 
@@ -165,22 +176,25 @@ module.exports = {
 
         // 画像があれば落として付け直す（CDNのURLは期限切れになるので）
         const files = [];
-        const up = interaction.fields.getUploadedFiles('announce_img')?.first();
-        if (up && /^image\//.test(up.contentType || '')) {
-          const b = await fetch(up.url).then(r => r.arrayBuffer()).catch(() => null);
-          if (b) {
-            const nm = `ann.${(up.name.split('.').pop() || 'png').toLowerCase()}`;
-            files.push(new AttachmentBuilder(Buffer.from(b), { name: nm }));
-            embed.setImage(`attachment://${nm}`);
-          }
+        const uploads = [...(interaction.fields.getUploadedFiles('announce_img')?.values() || [])].slice(0, 10);
+        for (const [n, up] of uploads.entries()) {
+          if (!(up.contentType || '').startsWith('image/')) continue;
+          const bytes = await fetch(up.url).then(r => r.arrayBuffer()).catch(() => null);
+          if (!bytes) continue;
+          const ext = (up.name.split('.').pop() || 'png').toLowerCase();
+          const name = `ann-${n + 1}.${ext}`;
+          files.push(new AttachmentBuilder(Buffer.from(bytes), {name}));
+          if (files.length === 1) embed.setImage(`attachment://${name}`);
         }
 
-        const msg = await interaction.channel.send({ embeds: [embed], components: annRows(interaction.guild, p.ids), files });
-        if (up && !files.length) await interaction.editReply(box('⚠️ 画像を読み込めなかったため、文章だけ送信しました。'));
+        const target = p.ch ? await interaction.guild.channels.fetch(p.ch).catch(() => null) : interaction.channel;
+        if (!target?.send) return interaction.editReply(box('投稿先チャンネルが見つかりません。'));
+        const msg = await target.send({ embeds: [embed], components: annRows(interaction.guild, p.ids), files });
+        if (uploads.length && files.length !== uploads.length) await interaction.editReply(box('⚠️ 画像を読み込めなかったため、文章だけ送信しました。'));
         else await interaction.deleteReply();
 
         if (p.sticky) {
-          st.get(interaction.guildId).sticky[interaction.channelId] = { messageId: msg.id, text, roles: p.ids };
+          st.get(interaction.guildId).sticky[target.id] = { messageId: msg.id, text, roles: p.ids };
           await st.save(interaction.guild);
         }
       }

@@ -20,7 +20,10 @@ function panel() {
 // 案内を置く（前のは消す）
 async function place(ch) {
   const d = st.get(ch.guildId);
-  if (d.giftP?.msg) await ch.messages.delete(d.giftP.msg).catch(() => null);
+  if (d.giftP?.msg) {
+    const previous = await ch.guild.channels.fetch(d.giftP.ch).catch(() => null);
+    if(previous) await previous.messages.delete(d.giftP.msg).catch(() => null);
+  }
   const m = await ch.send({ ...panel(), flags: MessageFlags.SuppressNotifications });
   d.giftP = { ch: ch.id, msg: m.id };
   st.saveLater(ch.guild, 3000);
