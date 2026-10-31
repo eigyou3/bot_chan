@@ -79,6 +79,10 @@ function render(page='home',mode='pending',guildId=null) {
    container.addActionRowComponents(row(button('ranking_on','ON',ButtonStyle.Success),button('ranking_off','OFF',ButtonStyle.Danger)));
   }else if(page==='bump'){
    container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**Bump通知**\nリマインドの通知先と通知方法を設定します。\n\n-# 本番では設定を変更できます。'));
+  }else if(page==='inmonths'){
+   const d=st.get(guildId);
+   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('現在：**'+(d.inactiveMonths||d.inactive?.months||3)+'か月**\n-# 月数の変更では自動キックは有効になりません。'));
+   container.addActionRowComponents(row(select('months','判定期間を選択',Array.from({length:12},(_,n)=>[String(n+1),(n+1)+'か月']))));
   }else container.addTextDisplayComponents(new TextDisplayBuilder().setContent(screen[page][1]));
   const next=page==='notifications'?[['vc','🔊 VC参加通知','参加通知を送るチャンネル'],['ranking','🏆 VCランキング','ランキングのON/OFF・投稿先'],['bump','🔔 Bump通知','通知先・リマインド設定']]:
     page==='members'?[['inactive','未活動メンバー管理','活動状況と対象者の管理']]:
@@ -98,6 +102,20 @@ async function handle(i){
  }
  const id=i.customId.slice(ROOT.length);
  const mode=isGI(i.guildId)?'on':'pending';
+ if(id==='months'){
+  const months=Number(i.values?.[0]),d=st.get(i.guildId);
+  if(!Number.isInteger(months)||months<1||months>12)return i.reply({content:'1〜12か月を選んでください。',flags:MessageFlags.Ephemeral});
+  const old=d.inactiveMonths,oldNested=d.inactive?.months;
+  d.inactiveMonths=months;
+  if(d.inactive)d.inactive.months=months;
+  if(!await st.save(i.guild)){
+   d.inactiveMonths=old;
+   if(d.inactive)d.inactive.months=oldNested;
+   return i.reply({content:'保存できませんでした。変更を取り消しました。',flags:MessageFlags.Ephemeral});
+  }
+  await i.update(render('inmonths',mode,i.guildId));
+  return true;
+ }
  if(id==='ranking_on'||id==='ranking_off'){
   const d=st.get(i.guildId),enabling=id==='ranking_on';
   if(enabling&&!d.vc)return i.reply({content:'先にVC通知先を設定してください。',flags:MessageFlags.Ephemeral});
