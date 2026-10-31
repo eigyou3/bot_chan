@@ -5,6 +5,27 @@ const row=(...items)=>new ActionRowBuilder().addComponents(...items);
 const button=(id,label,style=ButtonStyle.Secondary)=>new ButtonBuilder().setCustomId('cfg_'+id).setLabel(label).setStyle(style);
 async function handle(i){
  const id=i.customId.slice(4),d=st.get(i.guildId);
+ if(id==='bumpmenu'){
+   await i.reply({content:'**🔔 Bump通知**\\n現在の投稿先：'+(d.bump?.ch?'<#'+d.bump.ch+'>':'未設定')+'\\n@here：'+(d.bump?.here?'ON':'OFF'),components:[row(button('bumpchannel','投稿先を選択'),button('bumphere','@hereを切り替え'))],flags:MessageFlags.Ephemeral});return;
+ }
+ if(id==='bumphere'){
+   if(!d.bump?.ch)return i.reply({content:'先にBumpの投稿先を指定してください。',flags:MessageFlags.Ephemeral});
+   const ch=await i.guild.channels.fetch(d.bump.ch).catch(()=>null);
+   if(!ch)return i.reply({content:'投稿先が見つかりません。',flags:MessageFlags.Ephemeral});
+   try{await require('./bump').configure(ch,!d.bump.here);await append(i.guild,i.user.id,'Bumpの@hereを'+(d.bump.here?'ON':'OFF')+'に変更');
+     await i.reply({content:'✅ @here：'+(d.bump.here?'ON':'OFF'),flags:MessageFlags.Ephemeral});
+   }catch(e){await i.reply({content:'⚠️ '+e.message,flags:MessageFlags.Ephemeral});}return;
+ }
+ if(id==='bumpchannel'){
+   await i.reply({content:'Bumpの投稿先を選んでください。',components:[row(new ChannelSelectMenuBuilder().setCustomId('cfg_bumpselected').addChannelTypes(ChannelType.GuildText))],flags:MessageFlags.Ephemeral});return;
+ }
+ if(id==='bumpselected'){
+   const ch=await i.guild.channels.fetch(i.values[0]).catch(()=>null);
+   if(!ch?.send||ch.id===st.findCh(i.guild)?.id)return i.update({content:'通常のテキストチャンネルを選んでください。',components:[]});
+   try{await require('./bump').configure(ch,d.bump?.here||false);await append(i.guild,i.user.id,'Bump通知先を <#'+ch.id+'> に設定');
+     await i.update({content:'✅ Bump通知先：<#'+ch.id+'>',components:[],allowedMentions:{parse:[]}});
+   }catch(e){await i.update({content:'⚠️ '+e.message,components:[]});}return;
+ }
  if(id==='vcrmenu'){
   await i.reply({content:'**🏆 VCランキング**\n現在：'+(d.rkOff?'OFF':'ON')+'\n通知先：'+(d.vc?'<#'+d.vc+'>':'未設定'),components:[row(button('vcron','ON',ButtonStyle.Success),button('vcroff','OFF',ButtonStyle.Danger))],flags:MessageFlags.Ephemeral});return;
  }
