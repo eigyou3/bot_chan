@@ -4,7 +4,7 @@ const { isAdmin, deny } = require('../utils/perm');
 const { eligible, managedRole, restoreSuspended } = require('../utils/inactive');
 
 module.exports = {
-  data: new SlashCommandBuilder().setName('inactive').setDescription('${d.inactive.months || 3}か月活動なしの参加意思確認と自動キックを管理します').setContexts(InteractionContextType.Guild)
+  data: new SlashCommandBuilder().setName('inactive').setDescription('非アクティブ期間の参加意思確認と自動キックを管理します').setContexts(InteractionContextType.Guild)
     .addSubcommand(c => c.setName('enable').setDescription('発言・VC参加の監視と警告つき自動キックを有効化')
       .addChannelOption(o => o.setName('log').setDescription('管理者が確認するログ送信先').addChannelTypes(ChannelType.GuildText).setRequired(true))
       .addRoleOption(o => o.setName('role').setDescription('警告時に外し、参加継続時に必ず付与するロール').setRequired(true))
