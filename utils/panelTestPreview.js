@@ -23,9 +23,9 @@ function render(page='home') {
   if(!target) {
     embed.setTitle('⚙️ Bot 管理パネル').setDescription('**プレビューモード**\n実際の設定やメッセージは変更されません。\n\n管理したい機能を選択してください。');
     components = [
-      line(button('announce','📢 アナウンスを作る',ButtonStyle.Primary),button('notifications','🛎️ 通知設定',ButtonStyle.Primary)),
-      line(button('analytics','📊 サーバー分析'),button('members','👥 メンバー管理')),
-      line(button('genshin','🎮 原神サーバー：ON',ButtonStyle.Success),button('contact','🗨️ お問い合わせ')),
+      line(button('announce','📢 アナウンスを作る',ButtonStyle.Primary),button('notifications','🛎️ 通知設定',ButtonStyle.Primary),button('analytics','📊 サーバー分析')),
+      line(button('members','👥 メンバー管理'),button('genshin','🎮 原神サーバー：ON',ButtonStyle.Success)),
+      line(button('contact','🗨️ お問い合わせ')),
       line(button('reset','すべての設定を初期化',ButtonStyle.Danger))
     ];
   } else {
