@@ -1,3 +1,4 @@
+const i18n = require('./buildLocale');
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, AttachmentBuilder, MessageFlags } = require('discord.js');
 const { randomBytes } = require('crypto');
 const st = require('./store');
@@ -10,11 +11,12 @@ const TTL = 14 * 60 * 1000;
 const box = t => new EmbedBuilder().setColor('#8A8A8A').setDescription(t);
 const button = (id, label, style = ButtonStyle.Secondary) => new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style);
 const row = (...items) => new ActionRowBuilder().addComponents(...items);
-const author = s => ({ name: `${s.name} さんのビルドカード`, iconURL: s.avatar });
-const owner = s => `<@${s.user}> がビルドカードを作成`;
+const author = s => ({ name: `${s.name}${i18n.t(s.locale,'card')}`, iconURL: s.avatar });
+const owner = s => `<@${s.user}> ${i18n.t(s.locale,'owned')}`;
 
-function panel() {
-  return { embeds: [box('## ビルドカード作成\n登録したUIDから、展示キャラクターのビルドカードを作成できます。\n作成方法を選んでね！')], components: [row(button('bc_open_score', '作成:スコア表示ON', ButtonStyle.Primary), button('bc_open_plain', '作成:スコア表示OFF'))] };
+function panel(locale = 'ja') {
+  const t = k => i18n.t(locale,k);
+  return { embeds: [box(`## ${t('create')}\n${t('intro')}\n${t('how')}`)], components: [row(button('bc_open_score', t('on'), ButtonStyle.Primary), button('bc_open_plain', t('off')))] };
 }
 
 // チャンネルごとに1枚。再投稿中の重複を防ぎ、生成カードの後にも移動する。
@@ -33,7 +35,7 @@ async function place(ch, create = false) {
 }
 
 async function start(i) {
-  if (!isGI(i.guildId)) return i.reply({ content: 'このサーバーでは使用できません。', ephemeral: true });
+  if (!isGI(i.guildId)) return i.reply({ content: i18n.t(i.locale,'notAllowed'), ephemeral: true });
   await i.deferReply();
   await place(i.channel, true);
   const saved = await st.save(i.guild);
@@ -42,10 +44,11 @@ async function start(i) {
 }
 
 function controls(s) {
-  const menu = new StringSelectMenuBuilder().setCustomId(`bc_char_${s.id}`).setPlaceholder('キャラクターを選択').addOptions(s.list.slice(0, 25).map(a => ({ label: s.names[a.avatarId] || `キャラ ${a.avatarId}`, value: String(a.avatarId), default: String(a.avatarId) === s.aid })));
+  const t = k => i18n.t(s.locale,k);
+  const menu = new StringSelectMenuBuilder().setCustomId(`bc_char_${s.id}`).setPlaceholder(t('select')).addOptions(s.list.slice(0, 25).map(a => ({ label: en.name(a.avatarId, i18n.language(s.locale)) || s.names[a.avatarId] || `${t('unknown')} ${a.avatarId}`, value: String(a.avatarId), default: String(a.avatarId) === s.aid })));
   const rows = [row(menu)];
-  if (s.score) rows.push(row(new StringSelectMenuBuilder().setCustomId(`bc_base_${s.id}`).setPlaceholder('計算基準を選択').addOptions(Object.entries(art.BASES).map(([value, b]) => ({ label: b.nm, value, default: value === s.base })))));
-  rows.push(row(button(`bc_on_${s.id}`, 'スコア表示ON', s.score ? ButtonStyle.Primary : ButtonStyle.Secondary), button(`bc_off_${s.id}`, 'スコア表示OFF', s.score ? ButtonStyle.Secondary : ButtonStyle.Primary), button(`bc_end_${s.id}`, '終了')));
+  if (s.score) rows.push(row(new StringSelectMenuBuilder().setCustomId(`bc_base_${s.id}`).setPlaceholder(t('criterion')).addOptions(Object.entries(art.BASES).map(([value, b]) => ({ label: i18n.basis(s.locale,value), value, default: value === s.base })))));
+  rows.push(row(button(`bc_on_${s.id}`, t('scoreOn'), s.score ? ButtonStyle.Primary : ButtonStyle.Secondary), button(`bc_off_${s.id}`, t('scoreOff'), s.score ? ButtonStyle.Secondary : ButtonStyle.Primary), button(`bc_end_${s.id}`, t('finish'))));
   if (s.score && s.aid && !s.list.find(a => String(a.avatarId) === s.aid)?.lim) rows.push(links(s.uid));
   return rows;
 }
@@ -59,11 +62,11 @@ async function refresh(i, s) {
   if (!a || (s.score && !s.base)) {
     s.buf = null;
     s.embed = null;
-    return i.editReply({ content: owner(s), allowedMentions: { parse: [] }, embeds: [box('キャラクターを選択してください。\nスコア表示ONの場合は、計算基準も選択してください。\nスコア表示OFFでは、聖遺物のOPも非表示になります。').setAuthor(author(s))], attachments: [], components: controls(s) });
+    return i.editReply({ content: owner(s), allowedMentions: { parse: [] }, embeds: [box(['choose','chooseBase','hidden'].map(k=>i18n.t(s.locale,k)).join('\n')).setAuthor(author(s))], attachments: [], components: controls(s) });
   }
-  const d = await require('./character').build(a, s.uid, s.base, s.score);
+  const d = await require('./character').build(a, s.uid, s.base, s.score, s.locale);
   s.buf = await require('./charCard').charCard(d, s.locale);
-  s.caption = `## ${d.name}のビルドカード\n${s.score && !a.lim ? `計算基準：${art.BASES[s.base].nm}\n\`${art.FORMULAS[s.base]}\`\n※聖遺物のサブOPで計算` : 'スコア・聖遺物OP：非表示'}${a.lim ? '\nキャラ詳細が非公開のため、わかる範囲で作ったよ。' : ''}`;
+  s.caption = `## ${d.name}${i18n.t(s.locale,'card')}\n${s.score && !a.lim ? `${i18n.t(s.locale,'basis')}：${i18n.basis(s.locale,s.base)}\n\`${art.FORMULAS[s.base]}\`\n${i18n.t(s.locale,'sub')}` : i18n.t(s.locale,'disabled')}${a.lim ? '\n'+i18n.t(s.locale,'limited') : ''}`;
   s.embed = box(s.caption).setAuthor(author(s)).setImage('attachment://build-card.png');
   return i.editReply({ content: owner(s), allowedMentions: { parse: [] }, embeds: [s.embed], attachments: [], files: [new AttachmentBuilder(s.buf, { name: 'build-card.png' })], components: controls(s) });
 }
@@ -74,12 +77,12 @@ async function handle(i) {
   for (const [id, s] of sessions) if (Date.now() - s.at > TTL) sessions.delete(id);
   if (i.customId.startsWith('bc_open_')) {
     const uid = st.get(i.guildId).intro?.[i.user.id]?.uid;
-    if (!uid) return i.reply({ content: '先に自己紹介からUIDを登録してね！', ephemeral: true });
+    if (!uid) return i.reply({ content: i18n.t(i.locale,'noUid'), ephemeral: true });
     await i.deferReply();
     const { p, raw } = await en.player(uid);
-    if (!p) return i.editReply('プレイヤー情報を取得できませんでした。UIDを確認して、少し待ってから試してね。');
+    if (!p) return i.editReply(i18n.t(i.locale,'badUid'));
     const list = raw?.length ? raw : (p.showAvatarInfoList || []).map(a => ({ ...a, lim: true }));
-    if (!list.length) return i.editReply('展示しているキャラクターがいなかったよ。');
+    if (!list.length) return i.editReply(i18n.t(i.locale,'noCharacters'));
     for (const [id, old] of sessions) if (old.user === i.user.id && old.channel === i.channelId) sessions.delete(id);
     const s = { id: randomBytes(8).toString('hex'), user: i.user.id, name: i.member?.displayName || i.user.globalName || i.user.username, avatar: i.user.displayAvatarURL(), channel: i.channelId, guild: i.guildId, uid, list, names: await en.names(), score: i.customId.endsWith('score'), locale: i.locale || 'ja', base: null, aid: null, at: Date.now() };
     sessions.set(s.id, s);
@@ -88,8 +91,8 @@ async function handle(i) {
   }
   const [, action, id] = i.customId.split('_');
   const s = sessions.get(id);
-  if (s && s.user !== i.user.id) return i.reply({ content: 'このカードは作成した本人だけが操作できます。自分のカードは案内のボタンから作成してね。', ephemeral: true });
-  if (!s || s.guild !== i.guildId || s.channel !== i.channelId) return i.reply({ content: '操作画面の有効期限が切れたよ。案内のボタンから開き直してね。', ephemeral: true });
+  if (s && s.user !== i.user.id) return i.reply({ content: i18n.t(i.locale,'onlyOwner'), ephemeral: true });
+  if (!s || s.guild !== i.guildId || s.channel !== i.channelId) return i.reply({ content: i18n.t(i.locale,'expired'), ephemeral: true });
   if (s.busy) return i.deferUpdate();
   s.busy = true;
   try {
