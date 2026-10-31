@@ -62,7 +62,7 @@ async function refresh(i, s) {
     return i.editReply({ content: owner(s), allowedMentions: { parse: [] }, embeds: [box('キャラクターを選択してください。\nスコア表示ONの場合は、計算基準も選択してください。\nスコア表示OFFでは、聖遺物のOPも非表示になります。').setAuthor(author(s))], attachments: [], components: controls(s) });
   }
   const d = await require('./character').build(a, s.uid, s.base, s.score);
-  s.buf = await require('./charCard').charCard(d);
+  s.buf = await require('./charCard').charCard(d, s.locale);
   s.caption = `## ${d.name}のビルドカード\n${s.score && !a.lim ? `計算基準：${art.BASES[s.base].nm}\n\`${art.FORMULAS[s.base]}\`\n※聖遺物のサブOPで計算` : 'スコア・聖遺物OP：非表示'}${a.lim ? '\nキャラ詳細が非公開のため、わかる範囲で作ったよ。' : ''}`;
   s.embed = box(s.caption).setAuthor(author(s)).setImage('attachment://build-card.png');
   return i.editReply({ content: owner(s), allowedMentions: { parse: [] }, embeds: [s.embed], attachments: [], files: [new AttachmentBuilder(s.buf, { name: 'build-card.png' })], components: controls(s) });
@@ -81,7 +81,7 @@ async function handle(i) {
     const list = raw?.length ? raw : (p.showAvatarInfoList || []).map(a => ({ ...a, lim: true }));
     if (!list.length) return i.editReply('展示しているキャラクターがいなかったよ。');
     for (const [id, old] of sessions) if (old.user === i.user.id && old.channel === i.channelId) sessions.delete(id);
-    const s = { id: randomBytes(8).toString('hex'), user: i.user.id, name: i.member?.displayName || i.user.globalName || i.user.username, avatar: i.user.displayAvatarURL(), channel: i.channelId, guild: i.guildId, uid, list, names: await en.names(), score: i.customId.endsWith('score'), base: null, aid: null, at: Date.now() };
+    const s = { id: randomBytes(8).toString('hex'), user: i.user.id, name: i.member?.displayName || i.user.globalName || i.user.username, avatar: i.user.displayAvatarURL(), channel: i.channelId, guild: i.guildId, uid, list, names: await en.names(), score: i.customId.endsWith('score'), locale: i.locale || 'ja', base: null, aid: null, at: Date.now() };
     sessions.set(s.id, s);
     await refresh(i, s);
     return place(i.channel);
