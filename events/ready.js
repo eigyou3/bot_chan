@@ -8,6 +8,7 @@ const alarm = require('../utils/alarm');
 const inactive = require('../utils/inactive');
 const { syncAll } = require('../utils/registerCommands');
 const adminPanel = require('../utils/adminPanel');
+const { ensureConfig } = require('../utils/setup');
 
 module.exports = {
   name: 'clientReady',
@@ -18,7 +19,10 @@ module.exports = {
     // 設定を先に戻し、登録済み原神サーバーのコマンドも復元する。
     await st.loadAll(client);
     for (const guild of client.guilds.cache.values()) {
-      if(st.findCh(guild)) await adminPanel.ensureMessages(guild).catch(e => console.warn('管理パネル復元失敗:',guild.id,e.message));
+      try {
+        if (!st.findCh(guild)) await ensureConfig(guild);
+        await adminPanel.ensureMessages(guild);
+      } catch(e) { console.warn('管理パネル展開失敗:',guild.id,e.message); }
     }
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     try {
