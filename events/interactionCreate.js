@@ -25,7 +25,7 @@ module.exports = {
       return;
     }
 
-    if (interaction.isButton() && interaction.customId?.startsWith('cfg_')) {
+    if ((interaction.isButton() || interaction.isChannelSelectMenu() || interaction.isRoleSelectMenu() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) && interaction.customId?.startsWith('cfg_')) {
       try { await adminPanel.handle(interaction, client); } catch (e) {
         console.error('管理パネルエラー:', e);
         const msg = {content:'管理パネルの操作に失敗しました。',components:[]};
