@@ -1,5 +1,6 @@
 const en = require('./enka');
 const art = require('./artifact');
+const i18n = require('./buildLocale');
 
 // 聖遺物の小さい表記
 const SH = {
@@ -10,6 +11,8 @@ const SH = {
   FIGHT_PROP_ELEC_ADD_HURT: '雷ダメ', FIGHT_PROP_WATER_ADD_HURT: '水ダメ', FIGHT_PROP_GRASS_ADD_HURT: '草ダメ',
   FIGHT_PROP_WIND_ADD_HURT: '風ダメ', FIGHT_PROP_ROCK_ADD_HURT: '岩ダメ', FIGHT_PROP_ICE_ADD_HURT: '氷ダメ',
 };
+const shortKeys = { FIGHT_PROP_HP:'hp',FIGHT_PROP_HP_PERCENT:'hp',FIGHT_PROP_ATTACK:'atkShort',FIGHT_PROP_ATTACK_PERCENT:'atkShort',FIGHT_PROP_DEFENSE:'defShort',FIGHT_PROP_DEFENSE_PERCENT:'defShort',FIGHT_PROP_ELEMENT_MASTERY:'emShort',FIGHT_PROP_CRITICAL:'cr',FIGHT_PROP_CRITICAL_HURT:'cdShort',FIGHT_PROP_CHARGE_EFFICIENCY:'erShort',FIGHT_PROP_HEAL_ADD:'heal',FIGHT_PROP_PHYSICAL_ADD_HURT:'physicalShort' };
+const localShort = (id,lang) => { if(lang==='ja') return SH[id] || ''; const k=shortKeys[id]; return k ? i18n.t(lang,k) : /_ADD_HURT$/.test(id) ? i18n.t(lang,'dmgShort') : SH[id] || ''; };
 const isPct = id => /_PERCENT$|CRITICAL|CHARGE_EFFICIENCY|_ADD_HURT$|HEAL_ADD$/.test(id);
 const val = (id, v) => isPct(id) ? (+v).toFixed(1) : String(Math.round(v));
 
@@ -20,7 +23,9 @@ const n0 = v => Math.round(v).toLocaleString('en-US');
 const p1 = v => `${(v * 100).toFixed(1)}%`;
 
 // Enkaのデータ → カード用
-async function build(a, uid, base, showOp) {
+async function build(a, uid, base, showOp, locale = 'ja') {
+  const lang = i18n.language(locale);
+  const tr = key => i18n.t(lang,key);
   const nm = await en.names();
   const c = en.char(a.avatarId) || {};
   const fp = a.fightPropMap || {};
@@ -42,12 +47,12 @@ async function build(a, uid, base, showOp) {
   // キャラ詳細が非公開＝取れるのはキャラ・Lv・衣装だけ
   if (a.lim) {
     return {
-      name: nm[String(a.avatarId)] || '？', el, lv: a.level ?? '-',
+      name: en.name(a.avatarId, lang) || nm[String(a.avatarId)] || '？', el, lv: a.level ?? '-',
       cons: a.talentLevel ?? null, tal: ['-', '-', '-'], talIcons, art: artUrl, artFallback,
-      stats: ['HP', '攻撃力', '防御力', '元素熟知', '会心率', '会心ダメージ', '元素チャージ効率', '元素ダメージ'].map(k => [k, '-']),
+      stats: ['hp','atk','def','em','cr','cd','er','dmg'].map(k => [tr(k), '-']),
       wp: { name: '-', lv: '-', r: null, sub: '' },
       sets: [['-', 0]], relics: art.ORDER.map(() => ({ icon: null })),
-      total: 0, base: '', showOp: false, uid,
+      total: 0, base: '', showOp: false, uid, locale: lang,
     };
   }
 
@@ -56,16 +61,16 @@ async function build(a, uid, base, showOp) {
   // 元素ダメと物理の高い方
   const [dk, dn] = DMG[el] || [30, '物理'];
   const ed = fp[dk] || 0, ph = fp[30] || 0;
-  const dmg = ph > ed ? ['物理ダメージ', ph] : [`${dn}元素ダメージ`, ed];
+  const dmg = ph > ed ? [tr('physical'), ph] : [lang === 'ja' ? `${dn}元素ダメージ` : `${i18n.element(lang,el)} ${tr('elemental')}`, ed];
 
   const stats = [
     ['HP', n0(fp[2000] || 0)],
-    ['攻撃力', n0(fp[2001] || 0)],
-    ['防御力', n0(fp[2002] || 0)],
-    ['元素熟知', n0(fp[28] || 0)],
-    ['会心率', p1(fp[20] || 0), 1],
-    ['会心ダメージ', p1(fp[22] || 0), 1],
-    ['元素チャージ効率', p1(fp[23] || 0)],
+    [''+tr('atk')+'', n0(fp[2001] || 0)],
+    [''+tr('def')+'', n0(fp[2002] || 0)],
+    [''+tr('em')+'', n0(fp[28] || 0)],
+    [''+tr('cr')+'', p1(fp[20] || 0), 1],
+    [''+tr('cd')+'', p1(fp[22] || 0), 1],
+    [''+tr('er')+'', p1(fp[23] || 0)],
     [dmg[0], p1(dmg[1])],
   ];
   if (showOp) for (const entry of stats) if (art.HIGHLIGHTS[base]?.includes(entry[0])) entry[2] = 1;
@@ -73,17 +78,17 @@ async function build(a, uid, base, showOp) {
   const we = (a.equipList || []).find(e => e.weapon);
   const ws = we?.flat?.weaponStats?.[1];
   const wp = we ? {
-    name: en.loc(we.flat.nameTextMapHash),
+    name: en.loc(we.flat.nameTextMapHash, lang),
     icon: we.flat.icon ? `${en.UI}${we.flat.icon}.png` : null,
     lv: we.weapon.level,
     r: (Object.values(we.weapon.affixMap || {})[0] ?? 0) + 1,
-    sub: ws ? `${en.loc(ws.appendPropId)} ${val(ws.appendPropId, ws.statValue)}${isPct(ws.appendPropId) ? '%' : ''}` : '',
+    sub: ws ? `${en.loc(ws.appendPropId, lang)} ${val(ws.appendPropId, ws.statValue)}${isPct(ws.appendPropId) ? '%' : ''}` : '',
   } : { name: '-', lv: '-', r: 1, sub: '' };
 
   const rs = art.relics(a);
   const cnt = new Map();
   rs.forEach(e => {
-    const set = en.relicSet(e);
+    const set = en.relicSet(e, lang);
     const entry = cnt.get(set.id) || { name: set.name, count: 0 };
     entry.count++;
     cnt.set(set.id, entry);
@@ -97,8 +102,8 @@ async function build(a, uid, base, showOp) {
     const m = e.flat.reliquaryMainstat;
     return {
       icon: e.flat.icon ? `${en.UI}${e.flat.icon}.png` : null,
-      main: `${SH[m.mainPropId] || ''} ${val(m.mainPropId, m.statValue)}`,
-      subs: (e.flat.reliquarySubstats || []).map(x => `${SH[x.appendPropId] || ''} ${val(x.appendPropId, x.statValue)}`),
+      main: `${localShort(m.mainPropId, lang) || ''} ${val(m.mainPropId, m.statValue)}`,
+      subs: (e.flat.reliquarySubstats || []).map(x => `${localShort(x.appendPropId, lang) || ''} ${val(x.appendPropId, x.statValue)}`),
       score: art.score(e, base || 'atk'),
     };
   });
@@ -114,8 +119,8 @@ async function build(a, uid, base, showOp) {
     sets: sets.length ? sets : [['-', 0]],
     relics,
     total: sc.reduce((x, y) => x + y, 0),
-    base: base ? art.BASES[base].nm : '',
-    showOp, showScore: showOp, uid,
+    base: base ? i18n.basis(lang,base) : '',
+    showOp, showScore: showOp, uid, locale: lang,
   };
 }
 
