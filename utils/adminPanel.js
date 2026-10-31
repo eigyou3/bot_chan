@@ -37,9 +37,9 @@ const panel = guild => {
 };
 const logsPage = (guild,page=0) => {
   const logs=logData(guild);
-  const pages=Math.max(1,Math.ceil(logs.length/10));
+  const pages=Math.max(1,logs.length);
   const p=Math.max(0,Math.min(page,pages-1));
-  const items=logs.slice(p*10,p*10+10);
+  const items=logs.slice(p,p+1);
   const description=items.length ? items.map(entry=>`<t:${entry.at}:f>  <@${entry.by}> (\`${entry.by}\`)\n${entry.action}`).join('\n\n') : 'まだ管理操作はありません。';
   return {embeds:[new EmbedBuilder().setColor('#64748B').setTitle('📋 Bot 管理ログ')
     .setDescription(description).setFooter({text:`${p+1} / ${pages} ページ・全${logs.length}件`})],
