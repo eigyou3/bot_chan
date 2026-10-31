@@ -21,8 +21,8 @@ function genshinGuide() {
 function generalGuide() {
   return new EmbedBuilder().setColor('#5865F2').setTitle('Botの使い方').setDescription([
     '**初めて使う管理者へ**',
-    '設定保存用の `#bot-config` が必要です。最初に `/setup` を実行してください。',
-    '原神用に使うサーバーは `/setgenshin` で登録します（初期設定も一緒に行います）。',
+    '導入時に非公開の `#bot-config` を自動作成します。削除・改名しないでください。',
+    '原神用に使うサーバーは `/setgenshin` で登録します。',
     '', '**サーバー管理者用**',
     '`/announce`・`/announce-off`：アナウンスの投稿・常駐解除',
     '`/alarm`・`/alarm-off`：毎日のアラーム設定・解除',
