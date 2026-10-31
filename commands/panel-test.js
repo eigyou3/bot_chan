@@ -8,6 +8,6 @@ module.exports = {
       return i.reply({content:'このテストは指定サーバーの所有者専用です。',flags:MessageFlags.Ephemeral});
     }
     if (i.channel?.name !== 'bot-config') return i.reply({content:'#bot-config で実行してください。',flags:MessageFlags.Ephemeral});
-    return i.reply({...preview.render('home'),flags:MessageFlags.Ephemeral});
+    return i.reply({...preview.render('home'),flags:MessageFlags.Ephemeral | MessageFlags.IsComponentsV2});
   }
 };
