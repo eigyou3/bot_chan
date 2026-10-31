@@ -186,12 +186,14 @@ module.exports = {
           }
         }
 
-        const msg = await interaction.channel.send({ embeds: [embed], components: annRows(interaction.guild, p.ids), files });
+        const target = p.ch ? await interaction.guild.channels.fetch(p.ch).catch(() => null) : interaction.channel;
+        if (!target?.send) return interaction.editReply(box('投稿先チャンネルが見つかりません。'));
+        const msg = await target.send({ embeds: [embed], components: annRows(interaction.guild, p.ids), files });
         if (up && !files.length) await interaction.editReply(box('⚠️ 画像を読み込めなかったため、文章だけ送信しました。'));
         else await interaction.deleteReply();
 
         if (p.sticky) {
-          st.get(interaction.guildId).sticky[interaction.channelId] = { messageId: msg.id, text, roles: p.ids };
+          st.get(interaction.guildId).sticky[target.id] = { messageId: msg.id, text, roles: p.ids };
           await st.save(interaction.guild);
         }
       }
