@@ -1,7 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
 const st = require('./store');
 const { ensureConfig } = require('./setup');
-const { OWNERS } = require('./perm');
 
 function welcomeEmbed() {
   const creator = '1088369918069715024';
