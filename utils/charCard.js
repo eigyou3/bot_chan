@@ -1,5 +1,6 @@
 const path = require('path');
 const { createCanvas, loadImage, GlobalFonts } = require('@napi-rs/canvas');
+const i18n = require('./buildLocale');
 
 // フォント：数字と本文は丸ゴ、名前と見出しはひな明朝
 const FB = (p, f) => path.join(__dirname, '..', 'node_modules', '@fontsource', p, 'files', f);
@@ -110,7 +111,9 @@ async function img(url) {
 // d: { name, el, lv, cons, tal:[A,E,Q], art, stats:[[名,値,強調?]], wp:{name,icon,lv,r,sub}, sets:[[名,数]], relics:[{icon,main,subs:[],score,best}], total, base, showOp, uid }
 async function charCard(d, locale = 'ja') {
   const fonts = fontFamilies(locale);
-  const [ac, tint, elName] = EL[d.el] || ['#888888', '#F2F2F2', ''];
+  const tr = key => i18n.t(locale,key);
+  const [ac, tint] = EL[d.el] || ['#888888', '#F2F2F2', ''];
+  const elName = i18n.element(locale,d.el);
   const [primaryArt, wpi, ...ris] = await Promise.all([img(d.art), img(d.wp?.icon), ...d.relics.map(r => img(r.icon))]);
   const art = primaryArt || (d.artFallback ? await img(d.artFallback) : null);
   const talents = await Promise.all((d.talIcons || []).map(img));
@@ -189,7 +192,7 @@ async function charCard(d, locale = 'ja') {
 
   // 天賦の透明な形だけを元素色で描く。四角い背景は付けない。
   let tx = 58;
-  ['通常', 'スキル', '爆発'].forEach((label, i) => {
+  ['normal','skill','burst'].map(tr).forEach((label, i) => {
     if (talents[i]) {
       const icon = createCanvas(42, 42);
       const ic = icon.getContext('2d');
@@ -246,7 +249,7 @@ async function charCard(d, locale = 'ja') {
   };
 
   // ---- 武器
-  head('武器', y + 24);
+  head(tr('weapon'), y + 24);
   y += 40;
   ctx.fillStyle = tint;
   rr(ctx, 64, y, 100, 100, 16);
@@ -273,7 +276,7 @@ async function charCard(d, locale = 'ja') {
 
   // ---- 聖遺物
   const setTxt = d.sets.filter(([, c]) => c).map(([n, c]) => `${n}×${c}`).join('　');
-  head('聖遺物', y + 24);
+  head(tr('artifacts'), y + 24);
   ctx.font = font(fonts.body, 24);
   ctx.fillStyle = INK;
   ctx.textAlign = 'left';
@@ -286,7 +289,7 @@ async function charCard(d, locale = 'ja') {
     const tw = ctx.measureText(d.total.toFixed(1)).width;
     ctx.font = font(fonts.serif, 24);
     ctx.fillStyle = SUB;
-    ctx.fillText(`${d.base}基準`, W - 64 - tw - 14, y + 24);
+    ctx.fillText(`${d.base} ${tr('standard')}`, W - 64 - tw - 14, y + 24);
   }
   // セット名はスコアと別の行にし、2セットずつでも重ねず全部表示する。
   ctx.font = font(fonts.body, 24);
