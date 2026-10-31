@@ -1,5 +1,5 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags,
-  StringSelectMenuBuilder, ContainerBuilder, TextDisplayBuilder } = require('discord.js');
+  StringSelectMenuBuilder, ChannelSelectMenuBuilder, ChannelType, PermissionFlagsBits, ContainerBuilder, TextDisplayBuilder } = require('discord.js');
 const ROOT='pt_';
 const testGuild='1341988738074542111';
 const { isGI } = require('./gi');
@@ -72,7 +72,8 @@ function render(page='home',mode='pending',guildId=null) {
    container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**VC参加通知**\n-# 通知先：'+target+'\n\n**VCランキング**\n-# 集計とランキング投稿の管理\n\n**Bump通知**\n-# リマインドと通知先の管理'));
   }else if(page==='vc'){
    const d=guildId ? st.get(guildId) : {};
-   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**現在の通知先**\n'+(d.vc?'<#'+d.vc+'>':'未設定')+'\n\n-# 本番ではここから通知先を変更できます。'));
+   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**現在の通知先**\n'+(d.vc?'<#'+d.vc+'>':'未設定')+'\n\n通知先を変更すると、VCランキングでも同じ投稿先を使用します。'));
+   container.addActionRowComponents(row(new ChannelSelectMenuBuilder().setCustomId(ROOT+'vc_select').setPlaceholder('VC通知先チャンネルを選択').addChannelTypes(ChannelType.GuildText)));
   }else if(page==='ranking'){
    container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**VCランキング**\nランキングのON/OFFと投稿先を設定します。\n\n-# 本番では設定を変更できます。'));
   }else if(page==='bump'){
@@ -90,12 +91,29 @@ function render(page='home',mode='pending',guildId=null) {
  return {components:[container],flags:MessageFlags.IsComponentsV2,allowedMentions:{parse:[]}};
 }
 async function handle(i){
- if(!(i.isButton()||i.isStringSelectMenu())||!i.customId?.startsWith(ROOT))return false;
+ if(!(i.isButton()||i.isStringSelectMenu()||i.isChannelSelectMenu())||!i.customId?.startsWith(ROOT))return false;
  if(i.guildId!==testGuild||i.user.id!==i.guild?.ownerId||i.channel?.name!=='bot-config'){
   await i.reply({content:'このテストは指定サーバーの所有者専用です。',flags:MessageFlags.Ephemeral});return true;
  }
  const id=i.customId.slice(ROOT.length);
  const mode=isGI(i.guildId)?'on':'pending';
+ if(id==='vc_select'){
+  const selected=i.values?.[0];
+  const ch=selected&&await i.guild.channels.fetch(selected).catch(()=>null);
+  const me=i.guild.members.me||await i.guild.members.fetchMe();
+  const required=[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.EmbedLinks];
+  if(!ch?.isTextBased()||ch.id===i.channelId||!ch.permissionsFor(me)?.has(required)){
+   return i.reply({content:'Botが閲覧・投稿できる通常のテキストチャンネルを選択してください。',flags:MessageFlags.Ephemeral});
+  }
+  const data=st.get(i.guildId),old=data.vc;
+  data.vc=selected;
+  if(!await st.save(i.guild)){
+   data.vc=old;
+   return i.reply({content:'設定の保存に失敗しました。変更は取り消しました。',flags:MessageFlags.Ephemeral});
+  }
+  await i.update(render('vc',mode,i.guildId));
+  return true;
+ }
  if(id==='gen_on'||id==='gen_off'){
   await i.reply({content:'現在のテストでは原神の登録状態を変更しません。',flags:MessageFlags.Ephemeral});return true;
  }
