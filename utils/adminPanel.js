@@ -1,4 +1,4 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits: P, MessageFlags } = require('discord.js');
+const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits: P, MessageFlags, ChannelSelectMenuBuilder, RoleSelectMenuBuilder, ChannelType } = require('discord.js');
 const st = require('./store');
 const { syncGuild } = require('./registerCommands');
 
@@ -29,7 +29,7 @@ const panel = guild => {
         '⚠️ パネル初期化はサーバー所有者だけが実行できます。'
       ].join('\n'))],
     components:[
-      row(btn('genshin','原神サーバーに登録',ButtonStyle.Success,gi),btn('refresh','表示を更新')),
+      row(btn('genshin','原神サーバーに登録',ButtonStyle.Success,gi),btn('genshinmenu','原神設定',ButtonStyle.Primary)),
       row(btn('reset','管理パネルを初期化',ButtonStyle.Danger))
     ],
     allowedMentions:{parse:[]}
@@ -84,9 +84,75 @@ async function append(guild,by,action){
   if(message) await message.edit(logsPage(guild));
 }
 async function handle(i,client){
-  if(!i.isButton() || !i.customId.startsWith(PREFIX)) return false;
+  if(!(i.isButton() || i.isChannelSelectMenu() || i.isRoleSelectMenu()) || !i.customId.startsWith(PREFIX)) return false;
   if(!allowed(i)) {await i.reply({content:'この操作は #bot-config のサーバー管理者専用です。',flags:MessageFlags.Ephemeral});return true;}
   const id=i.customId.slice(PREFIX.length);
+  if(id==='genshinmenu'){
+    if(!require('./gi').isGI(i.guildId)){
+      await i.reply({content:'最初に「原神サーバーに登録」を押してください。',flags:MessageFlags.Ephemeral});return true;
+    }
+    const d=st.get(i.guildId);
+    const current=(entry)=>entry ? `<#${entry}>` : '未設定';
+    await i.reply({content:[
+      '**🎮 原神設定**',
+      `UID登録：${current(d.introP?.ch)} ／ 登録ロール：${d.introP?.role ? '<@&'+d.introP.role+'>' : '未設定'}`,
+      `ビルドカード：${current(d.genshinBuildChannel)}`,
+      `ギフトコード：${current(d.giftP?.ch)}`,
+      '設定する機能を選択してください。'
+    ].join('\n'),components:[
+      row(btn('uidrole','UID登録のロールを選択'),btn('uidch','UID登録のチャンネル')),
+      row(btn('buildch','ビルドカードのチャンネル'),btn('giftch','ギフトコードのチャンネル'))
+    ],flags:MessageFlags.Ephemeral,allowedMentions:{parse:[]}});return true;
+  }
+  if(['uidrole','uidch','buildch','giftch'].includes(id)){
+    const isRole=id==='uidrole';
+    const selector=isRole
+      ? new RoleSelectMenuBuilder().setCustomId(PREFIX+'select_uidrole').setPlaceholder('登録後に付与するロール')
+      : new ChannelSelectMenuBuilder().setCustomId(PREFIX+'select_'+id).setPlaceholder('投稿先のテキストチャンネル').addChannelTypes(ChannelType.GuildText);
+    await i.reply({content:isRole?'UID登録後に付与するロールを選択してください。':'投稿先チャンネルを選択してください。',components:[row(selector)],flags:MessageFlags.Ephemeral});return true;
+  }
+  if(id.startsWith('select_')){
+    const kind=id.slice(7), chosen=i.values?.[0];
+    if(!chosen){await i.reply({content:'選択できませんでした。',flags:MessageFlags.Ephemeral});return true;}
+    const d=st.get(i.guildId);
+    if(kind==='uidrole'){
+      d.genshinIntroRole=chosen;
+      if(!await st.save(i.guild)){await i.reply({content:'ロール設定を保存できませんでした。',flags:MessageFlags.Ephemeral});return true;}
+      await append(i.guild,i.user.id,`UID登録の付与ロールを <@&${chosen}> に設定`);
+      await i.update({content:'✅ 登録ロールを設定しました。続いてUID登録のチャンネルを指定してください。',components:[],allowedMentions:{parse:[]}});return true;
+    }
+    if(!['uidch','buildch','giftch'].includes(kind)){await i.reply({content:'不明な設定です。',flags:MessageFlags.Ephemeral});return true;}
+    const ch=await i.guild.channels.fetch(chosen).catch(()=>null);
+    if(!ch?.isTextBased() || ch.id===st.findCh(i.guild)?.id){await i.reply({content:'通常のテキストチャンネルを指定してください。',flags:MessageFlags.Ephemeral});return true;}
+    const me=i.guild.members.me || await i.guild.members.fetchMe();
+    if(!ch.permissionsFor(me)?.has([P.ViewChannel,P.SendMessages,P.EmbedLinks,P.ReadMessageHistory])){
+      await i.reply({content:'Botに選択先チャンネルの閲覧・送信・埋め込み・履歴閲覧権限が必要です。',flags:MessageFlags.Ephemeral});return true;
+    }
+    await i.deferUpdate();
+    try{
+      if(kind==='uidch'){
+        const roleId=d.genshinIntroRole || d.introP?.role;
+        if(!roleId)throw new Error('先にUID登録のロールを選んでください。');
+        await require('./intro').place(ch,roleId);
+      }else if(kind==='buildch'){
+        const old=d.genshinBuildChannel;
+        await require('./buildPanel').place(ch,true);
+        d.genshinBuildChannel=ch.id;
+        if(old && old!==ch.id){
+          const oldId=d.buildPanels?.[old];
+          const oldCh=await i.guild.channels.fetch(old).catch(()=>null);
+          if(oldId && oldCh)await oldCh.messages.delete(oldId).catch(()=>null);
+          if(d.buildPanels)delete d.buildPanels[old];
+        }
+      }else{
+        await require('./gift').place(ch);
+      }
+      if(!await st.save(i.guild))throw new Error('設定を保存できませんでした。');
+      await append(i.guild,i.user.id,`${({uidch:'UID登録',buildch:'ビルドカード',giftch:'ギフトコード'})[kind]}の投稿先を <#${ch.id}> に設定`);
+      await i.editReply({content:`✅ 投稿先を <#${ch.id}> に設定しました。`,components:[],allowedMentions:{parse:[]}});
+    }catch(e){await i.editReply({content:'⚠️ '+e.message,components:[]});}
+    return true;
+  }
   if(id==='refresh'){await i.update(panel(i.guild));return true;}
   if(id.startsWith('log_')){await i.update(logsPage(i.guild,Number(id.slice(4))||0));return true;}
   if(id==='genshin'){
