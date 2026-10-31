@@ -21,18 +21,23 @@ const screen={
  reset:['すべての設定を初期化','UID情報・分析履歴・管理ログも削除され、取り消せません。\n原神の常駐パネルや通知も停止します。\n\nテスト中は初期化できません。']
 };
 function choices(mode){
- return [['announce','📢 アナウンスを作る'],['notifications','🛎️ 通知設定'],
-  ...(mode==='on'?[['genshin','🎮 原神設定']]:[]),
-  ['analytics','📊 サーバー分析'],['members','👥 メンバー管理'],
-  ...(mode==='off'?[['enable','🎮 原神機能を有効化']]:[]),
-  ['contact','🗨️ お問い合わせ'],['reset','すべての設定を初期化']];
+ return [
+  ['announce','📢 アナウンスを作る','投稿先・本文・画像を設定して投稿'],
+  ['notifications','🛎️ 通知設定','VC参加通知・ランキング・Bump'],
+  ...(mode==='on'?[['genshin','🎮 原神設定','UID登録・ビルドカード・原神通知']]:[]),
+  ['analytics','📊 サーバー分析','メンバー数とVC活動の推移'],
+  ['members','👥 メンバー管理','非アクティブ管理'],
+  ...(mode==='off'?[['enable','🎮 原神機能を有効化','原神サーバーとして利用する']]:[]),
+  ['contact','🗨️ お問い合わせ','Bot制作者に連絡する'],
+  ['reset','すべての設定を初期化','設定・UID・分析履歴などを削除']
+ ];
 }
 function back(page){
  return ['vc','ranking','bump'].includes(page)?'notifications':page==='inactive'?'members':'home';
 }
 function select(id,placeholder,items) {
  return new StringSelectMenuBuilder().setCustomId(ROOT+id).setPlaceholder(placeholder)
-  .addOptions(items.map(([value,label])=>({value,label})));
+  .addOptions(items.map(([value,label,description])=>({value,label,...(description?{description}:{})})));
 }
 function render(page='home',mode='pending',layout='select'){
  if(!states.includes(mode))mode='pending';
@@ -47,7 +52,7 @@ function render(page='home',mode='pending',layout='select'){
    container.addActionRowComponents(row(button('mode_on_'+layout,'原神設定：ON',ButtonStyle.Success),button('mode_off_'+layout,'原神設定：OFF',ButtonStyle.Danger)));
   }
   if(layout==='select'){
-   container.addActionRowComponents(row(select('pick_'+mode+'_'+layout,'操作する項目を選択',choices(mode))));
+   container.addActionRowComponents(row(select('pick_'+mode+'_'+layout,'機能を選択してください',choices(mode))));
   }else{
    container.addActionRowComponents(row(
      button('go_'+mode+'_'+layout+'_announce','📢 アナウンスを作る',ButtonStyle.Primary),
