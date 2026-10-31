@@ -30,7 +30,7 @@ const panel = guild => {
       ].join('\n'))],
     components:[
       row(btn('genshin','原神サーバーに登録',ButtonStyle.Success,gi),btn('genshinmenu','原神設定',ButtonStyle.Primary)),
-      row(btn('reset','管理パネルを初期化',ButtonStyle.Danger))
+      row(btn('notifications','通知設定',ButtonStyle.Primary),btn('reset','管理パネルを初期化',ButtonStyle.Danger))
     ],
     allowedMentions:{parse:[]}
   };
@@ -87,6 +87,13 @@ async function handle(i,client){
   if(!(i.isButton() || i.isChannelSelectMenu() || i.isRoleSelectMenu()) || !i.customId.startsWith(PREFIX)) return false;
   if(!allowed(i)) {await i.reply({content:'この操作は #bot-config のサーバー管理者専用です。',flags:MessageFlags.Ephemeral});return true;}
   const id=i.customId.slice(PREFIX.length);
+  if(id==='notifications'){
+    const d=st.get(i.guildId);
+    await i.reply({content:'**🔔 通知設定**\\nVC通知先：'+(d.vc?'<#'+d.vc+'>':'未設定')+'\\nアナウンスは投稿先を選んで作成できます。',components:[row(btn('vcchannel','VC通知先を設定'),btn('annchannel','アナウンス投稿先を設定'))],flags:MessageFlags.Ephemeral});return true;
+  }
+  if(id==='vcchannel' || id==='annchannel'){
+    await i.reply({content:'テキストチャンネルを選んでください。',components:[row(new ChannelSelectMenuBuilder().setCustomId(PREFIX+'select_'+(id==='vcchannel'?'vc':'annchannel')).setPlaceholder('通知先チャンネル').addChannelTypes(ChannelType.GuildText))],flags:MessageFlags.Ephemeral});return true;
+  }
   if(id==='genshinmenu'){
     if(!require('./gi').isGI(i.guildId)){
       await i.reply({content:'最初に「原神サーバーに登録」を押してください。',flags:MessageFlags.Ephemeral});return true;
@@ -121,7 +128,7 @@ async function handle(i,client){
       await append(i.guild,i.user.id,`UID登録の付与ロールを <@&${chosen}> に設定`);
       await i.update({content:'✅ 登録ロールを設定しました。続いてUID登録のチャンネルを指定してください。',components:[],allowedMentions:{parse:[]}});return true;
     }
-    if(!['uidch','buildch','giftch'].includes(kind)){await i.reply({content:'不明な設定です。',flags:MessageFlags.Ephemeral});return true;}
+    if(!['uidch','buildch','giftch','vc','annchannel'].includes(kind)){await i.reply({content:'不明な設定です。',flags:MessageFlags.Ephemeral});return true;}
     const ch=await i.guild.channels.fetch(chosen).catch(()=>null);
     if(!ch?.isTextBased() || ch.id===st.findCh(i.guild)?.id){await i.reply({content:'通常のテキストチャンネルを指定してください。',flags:MessageFlags.Ephemeral});return true;}
     const me=i.guild.members.me || await i.guild.members.fetchMe();
@@ -130,6 +137,15 @@ async function handle(i,client){
     }
     await i.deferUpdate();
     try{
+      if(kind==='vc'){
+        const old=d.vc;d.vc=ch.id;
+        if(!await st.save(i.guild)){d.vc=old;throw new Error('設定を保存できませんでした。');}
+        await append(i.guild,i.user.id,'VC通知先を <#'+ch.id+'> に設定');
+        await i.editReply({content:'✅ VC通知先：<#'+ch.id+'>',components:[],allowedMentions:{parse:[]}});return true;
+      }
+      if(kind==='annchannel'){
+        await i.editReply({content:'✅ 投稿先：<#'+ch.id+'>。アナウンスの本文・画像・ロール・常駐設定は従来の /announce を使ってください（管理パネルへの統合は作業中）。',components:[],allowedMentions:{parse:[]}});return true;
+      }
       if(kind==='uidch'){
         const roleId=d.genshinIntroRole || d.introP?.role;
         if(!roleId)throw new Error('先にUID登録のロールを選んでください。');
