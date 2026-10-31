@@ -31,6 +31,7 @@ const panel = guild => {
     components:[
       row(btn('genshin','原神サーバーに登録',ButtonStyle.Success,gi),btn('genshinmenu','原神設定',ButtonStyle.Primary)),
       row(btn('notifications','通知設定',ButtonStyle.Primary),btn('activity','活動管理',ButtonStyle.Primary)),
+      row(btn('stats','サーバー分析'),btn('contact','お問い合わせ')),
       row(btn('reset','管理パネルを初期化',ButtonStyle.Danger))
     ],
     allowedMentions:{parse:[]}
@@ -89,6 +90,7 @@ async function handle(i,client){
   if(!allowed(i)) {await i.reply({content:'この操作は #bot-config のサーバー管理者専用です。',flags:MessageFlags.Ephemeral});return true;}
   const id=i.customId.slice(PREFIX.length);
   if(['bumpmenu','bumphere','bumpchannel','bumpselected','vcrmenu','vcron','vcroff','alarmmenu','alarmchannel','alarmselected','alarmremove','alarmdelete'].includes(id)||id.startsWith('alarmform_')){await require('./panelActivity').handle(i);return true;}
+  if(['stats','contact','contactwrite','contactform'].includes(id)){await require('./panelSupport').handle(i,client);return true;}
   if(id.startsWith('inactive_')){await require('./panelInactive').handle(i);return true;}
   if(id==='activity'){
     const cfg=st.get(i.guildId),n=cfg.inactive?.months||cfg.inactiveMonths||3;
