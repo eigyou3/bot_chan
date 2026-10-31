@@ -17,7 +17,7 @@ const baseAvatarId = id => String(id).split('-')[0];
 
 
 let nm = null, nmAt = 0;
-let chr = {}, pfp = {}, ja = {};
+let chr = {}, pfp = {}, ja = {}, locs = {};
 let relicSets = {}, relicItems = {};
 const cache = new Map();  // uid -> { at, ttl, p, av, raw }
 
@@ -30,7 +30,8 @@ async function names() {
     const [c0, c1, l0, l1, pf, relicData] = await Promise.all(['characters.json', 'gi/avatars.json', 'loc.json', 'gi/locs.json', 'pfps.json', 'gi/relics.json'].map(get));
     relicSets = relicData.Sets || {};
     relicItems = relicData.Items || {};
-    ja = { ...(l0.ja || {}), ...(l1.ja || {}) };
+    locs = Object.fromEntries(['ja','en','zh-CN','zh-TW'].map(lang => { const code = {'zh-CN':'zh-CN','zh-TW':'zh-TW'}[lang] || lang; return [lang, { ...(l0[code] || {}), ...(l1[code] || {}) }]; }));
+    ja = locs.ja;
     const c = { ...c0 };
     const cut = s => (s || '').replace(/^\/ui\//, '').replace(/\.png$/, '');
     for (const [id, v] of Object.entries(c1)) {
@@ -106,16 +107,17 @@ async function player(uid) {
 }
 
 // 日本語テキスト（ステータス名・セット名など）
-const loc = k => ja[String(k)] || '';
+const loc = (k, language = 'ja') => (locs[language] || ja)[String(k)] || ja[String(k)] || '';
+const name = (id, language = 'ja') => { const c = char(id); return c ? loc(c.NameTextMapHash, language) : ''; };
 
 // キャラのデータ（元素・天賦の並びなど）
 const char = id => chr[String(id)] || chr[baseAvatarId(id)] || null;
 const doll = id => DOLL[baseAvatarId(id)] || null;
-function relicSet(e) {
+function relicSet(e, language = 'ja') {
   const iconId = e.flat?.icon?.match(/UI_RelicIcon_(\d+)_/)?.[1];
   const setId = relicItems[String(e.itemId)]?.SetId || iconId;
   const hash = e.flat?.setNameTextMapHash || relicSets[setId]?.Name;
-  return { id: String(setId || hash || e.itemId), name: loc(hash) || loc(relicSets[setId]?.Name) || `セット ${setId || hash || '不明'}` };
+  return { id: String(setId || hash || e.itemId), name: loc(hash, language) || loc(relicSets[setId]?.Name, language) || `セット ${setId || hash || '不明'}` };
 }
 
-module.exports = { names, cleanUid, player, charIcon, pfpIcon, loc, char, relicSet, UI, doll, uiPath };
+module.exports = { names, name, cleanUid, player, charIcon, pfpIcon, loc, char, relicSet, UI, doll, uiPath };
