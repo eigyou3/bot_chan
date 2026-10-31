@@ -12,7 +12,9 @@
     "@fontsource/noto-sans-jp": "^5.2.9",
     "@fontsource/zen-maru-gothic": "^5.3.1",
     "@napi-rs/canvas": "^0.1.99",
-    "discord.js": "^14.27.0"
+    "discord.js": "^14.27.0",
+    "@expo-google-fonts/noto-sans-sc": "^0.4.3",
+    "@expo-google-fonts/noto-sans-tc": "^0.4.3"
   },
   "engines": {
     "node": ">=18.0.0"
