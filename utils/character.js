@@ -61,7 +61,7 @@ async function build(a, uid, base, showOp, locale = 'ja') {
   // 元素ダメと物理の高い方
   const [dk, dn] = DMG[el] || [30, '物理'];
   const ed = fp[dk] || 0, ph = fp[30] || 0;
-  const dmg = ph > ed ? [tr('physical'), ph] : [lang === 'ja' ? `${dn}元素ダメージ` : `${i18n.element(lang,el)} ${tr('elemental')}`, ed];
+  const dmg = ph > ed ? [tr('physical'), ph] : [lang === 'ja' ? `${dn}元素ダメージ` : `${i18n.element(lang,el)}${lang === 'en' ? ' DMG Bonus' : lang === 'zh-TW' ? '傷害加成' : '伤害加成'}`, ed];
 
   const stats = [
     ['HP', n0(fp[2000] || 0)],
@@ -112,7 +112,7 @@ async function build(a, uid, base, showOp, locale = 'ja') {
   relics.forEach(r => { if (r.main && r.score === top) r.best = true; });
 
   return {
-    name: nm[String(a.avatarId)] || '？', el,
+    name: en.name(a.avatarId, lang) || nm[String(a.avatarId)] || '？', el,
     lv: a.propMap?.['4001']?.val || '-',
     cons: (a.talentIdList || []).length,
     tal, talIcons, art: artUrl, artFallback, stats, wp,
