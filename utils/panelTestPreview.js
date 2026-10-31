@@ -1,5 +1,5 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags,
-  StringSelectMenuBuilder, ContainerBuilder, TextDisplayBuilder } = require('discord.js');
+  StringSelectMenuBuilder, ChannelSelectMenuBuilder, RoleSelectMenuBuilder, ChannelType, PermissionFlagsBits, ContainerBuilder, TextDisplayBuilder } = require('discord.js');
 const ROOT='pt_';
 const testGuild='1341988738074542111';
 const { isGI } = require('./gi');
@@ -72,11 +72,22 @@ function render(page='home',mode='pending',guildId=null) {
    container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**VC参加通知**\n-# 通知先：'+target+'\n\n**VCランキング**\n-# 集計とランキング投稿の管理\n\n**Bump通知**\n-# リマインドと通知先の管理'));
   }else if(page==='vc'){
    const d=guildId ? st.get(guildId) : {};
-   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**現在の通知先**\n'+(d.vc?'<#'+d.vc+'>':'未設定')+'\n\n-# 本番ではここから通知先を変更できます。'));
+   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**現在の通知先**\n'+(d.vc?'<#'+d.vc+'>':'未設定')+'\n\n通知先を変更すると、VCランキングでも同じ投稿先を使用します。'));
+   container.addActionRowComponents(row(new ChannelSelectMenuBuilder().setCustomId(ROOT+'vc_select').setPlaceholder('VC通知先チャンネルを選択').addChannelTypes(ChannelType.GuildText)));
   }else if(page==='ranking'){
-   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**VCランキング**\nランキングのON/OFFと投稿先を設定します。\n\n-# 本番では設定を変更できます。'));
+   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**VCランキング**\n状態：'+(st.get(guildId).rkOff?'OFF':'ON')+'\n投稿先：'+(st.get(guildId).vc?'<#'+st.get(guildId).vc+'>':'未設定')+'\n\n-# 投稿先はVC参加通知と共通です。'));
+   container.addActionRowComponents(row(button('ranking_on','ON',ButtonStyle.Success),button('ranking_off','OFF',ButtonStyle.Danger)));
   }else if(page==='bump'){
    container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**Bump通知**\nリマインドの通知先と通知方法を設定します。\n\n-# 本番では設定を変更できます。'));
+  }else if(page==='inrole'||page==='inexclude'){
+   const d=st.get(guildId),settings=d.inactiveSettings||{},excluded=page==='inexclude';
+   const current=excluded?settings.exclude||d.inactive?.exclude:settings.role||d.inactive?.role;
+   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('現在：'+(current?'<@&'+current+'>':'未設定')+'\n-# '+(excluded?'除外ロールは未設定にも戻せます。':'対象ロールを指定してください。')));
+   container.addActionRowComponents(row(new RoleSelectMenuBuilder().setCustomId(ROOT+(excluded?'inactive_exclude':'inactive_role')).setPlaceholder(excluded?'除外ロールを選択（選択なしも可）':'対象ロールを選択').setMinValues(excluded?0:1).setMaxValues(1)));
+  }else if(page==='inmonths'){
+   const d=st.get(guildId);
+   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('現在：**'+(d.inactiveMonths||d.inactive?.months||3)+'か月**\n-# 月数の変更では自動キックは有効になりません。'));
+   container.addActionRowComponents(row(select('months','判定期間を選択',Array.from({length:12},(_,n)=>[String(n+1),(n+1)+'か月']))));
   }else container.addTextDisplayComponents(new TextDisplayBuilder().setContent(screen[page][1]));
   const next=page==='notifications'?[['vc','🔊 VC参加通知','参加通知を送るチャンネル'],['ranking','🏆 VCランキング','ランキングのON/OFF・投稿先'],['bump','🔔 Bump通知','通知先・リマインド設定']]:
     page==='members'?[['inactive','未活動メンバー管理','活動状況と対象者の管理']]:
@@ -90,12 +101,76 @@ function render(page='home',mode='pending',guildId=null) {
  return {components:[container],flags:MessageFlags.IsComponentsV2,allowedMentions:{parse:[]}};
 }
 async function handle(i){
- if(!(i.isButton()||i.isStringSelectMenu())||!i.customId?.startsWith(ROOT))return false;
+ if(!(i.isButton()||i.isStringSelectMenu()||i.isChannelSelectMenu()||i.isRoleSelectMenu())||!i.customId?.startsWith(ROOT))return false;
  if(i.guildId!==testGuild||i.user.id!==i.guild?.ownerId||i.channel?.name!=='bot-config'){
   await i.reply({content:'このテストは指定サーバーの所有者専用です。',flags:MessageFlags.Ephemeral});return true;
  }
  const id=i.customId.slice(ROOT.length);
  const mode=isGI(i.guildId)?'on':'pending';
+ if(id==='inactive_role'||id==='inactive_exclude'){
+  const d=st.get(i.guildId),s=d.inactive||{},field=id==='inactive_role'?'role':'exclude';
+  if(s.enabled)return i.reply({content:'未活動メンバー管理を停止してから変更してください。',flags:MessageFlags.Ephemeral});
+  const value=i.values?.[0]||null;
+  if(field==='role'&&!value)return i.reply({content:'対象ロールを指定してください。',flags:MessageFlags.Ephemeral});
+  if(value&&field==='role'){
+   try{await require('./inactive').managedRole(i.guild,value);}
+   catch(e){return i.reply({content:'ロールを選択できません：'+e.message,flags:MessageFlags.Ephemeral});}
+  }
+  const old={...(d.inactiveSettings||{})};
+  d.inactiveSettings={...old,[field]:value};
+  if(!await st.save(i.guild)){
+   d.inactiveSettings=old;
+   return i.reply({content:'設定の保存に失敗しました。',flags:MessageFlags.Ephemeral});
+  }
+  await i.update(render(field==='role'?'inrole':'inexclude',mode,i.guildId));
+  return true;
+ }
+ if(id==='months'){
+  const months=Number(i.values?.[0]),d=st.get(i.guildId);
+  if(!Number.isInteger(months)||months<1||months>12)return i.reply({content:'1〜12か月を選んでください。',flags:MessageFlags.Ephemeral});
+  const old=d.inactiveMonths,oldNested=d.inactive?.months;
+  d.inactiveMonths=months;
+  if(d.inactive)d.inactive.months=months;
+  if(!await st.save(i.guild)){
+   d.inactiveMonths=old;
+   if(d.inactive)d.inactive.months=oldNested;
+   return i.reply({content:'保存できませんでした。変更を取り消しました。',flags:MessageFlags.Ephemeral});
+  }
+  await i.update(render('inmonths',mode,i.guildId));
+  return true;
+ }
+ if(id==='ranking_on'||id==='ranking_off'){
+  const d=st.get(i.guildId),enabling=id==='ranking_on';
+  if(enabling&&!d.vc)return i.reply({content:'先にVC通知先を設定してください。',flags:MessageFlags.Ephemeral});
+  const previous=d.rkOff;d.rkOff=!enabling;
+  try{
+   if(enabling)await require('./vcrank').start(i.guild);
+   else await require('./vcrank').stop(i.guild);
+   if(!await st.save(i.guild))throw Error('保存に失敗しました。');
+  }catch(e){
+   d.rkOff=previous;
+   return i.reply({content:'切り替えに失敗しました：'+e.message,flags:MessageFlags.Ephemeral});
+  }
+  await i.update(render('ranking',mode,i.guildId));
+  return true;
+ }
+ if(id==='vc_select'){
+  const selected=i.values?.[0];
+  const ch=selected&&await i.guild.channels.fetch(selected).catch(()=>null);
+  const me=i.guild.members.me||await i.guild.members.fetchMe();
+  const required=[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.EmbedLinks];
+  if(!ch?.isTextBased()||ch.id===i.channelId||!ch.permissionsFor(me)?.has(required)){
+   return i.reply({content:'Botが閲覧・投稿できる通常のテキストチャンネルを選択してください。',flags:MessageFlags.Ephemeral});
+  }
+  const data=st.get(i.guildId),old=data.vc;
+  data.vc=selected;
+  if(!await st.save(i.guild)){
+   data.vc=old;
+   return i.reply({content:'設定の保存に失敗しました。変更は取り消しました。',flags:MessageFlags.Ephemeral});
+  }
+  await i.update(render('vc',mode,i.guildId));
+  return true;
+ }
  if(id==='gen_on'||id==='gen_off'){
   await i.reply({content:'現在のテストでは原神の登録状態を変更しません。',flags:MessageFlags.Ephemeral});return true;
  }
