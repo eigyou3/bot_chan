@@ -65,15 +65,15 @@ async function build(a, uid, base, showOp, locale = 'ja') {
 
   const stats = [
     ['HP', n0(fp[2000] || 0)],
-    [''+tr('atk')+'', n0(fp[2001] || 0)],
-    [''+tr('def')+'', n0(fp[2002] || 0)],
-    [''+tr('em')+'', n0(fp[28] || 0)],
-    [''+tr('cr')+'', p1(fp[20] || 0), 1],
-    [''+tr('cd')+'', p1(fp[22] || 0), 1],
-    [''+tr('er')+'', p1(fp[23] || 0)],
+    [tr('atk'), n0(fp[2001] || 0)],
+    [tr('def'), n0(fp[2002] || 0)],
+    [tr('em'), n0(fp[28] || 0)],
+    [tr('cr'), p1(fp[20] || 0), 1],
+    [tr('cd'), p1(fp[22] || 0), 1],
+    [tr('er'), p1(fp[23] || 0)],
     [dmg[0], p1(dmg[1])],
   ];
-  if (showOp) for (const entry of stats) if (art.HIGHLIGHTS[base]?.includes(entry[0])) entry[2] = 1;
+  if (showOp) for (const [index, entry] of stats.entries()) if (art.HIGHLIGHTS[base]?.includes(['HP','攻撃力','防御力','元素熟知','会心率','会心ダメージ','元素チャージ効率','元素ダメージ'][index])) entry[2] = 1;
 
   const we = (a.equipList || []).find(e => e.weapon);
   const ws = we?.flat?.weaponStats?.[1];
