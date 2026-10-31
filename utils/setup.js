@@ -6,12 +6,16 @@ async function ensureConfig(guild) {
   let ch = st.findCh(guild);
   if (!ch) {
     if (!me.permissions.has(P.ManageChannels)) throw new Error('Botに「チャンネルの管理」権限を付けて /setup を再実行してください。または #bot-config を手動で作成してください。');
+    const adminRoles = [...guild.roles.cache.values()].filter(role =>
+      role.id !== guild.roles.everyone.id && role.permissions.has(P.Administrator));
     ch = await guild.channels.create({
       name: st.CH_NAME, type: ChannelType.GuildText,
       topic: 'Botの設定保存専用。削除・改名しないでください。使い方は /help。',
       permissionOverwrites: [
         { id: guild.roles.everyone.id, deny: [P.ViewChannel] },
         { id: me.id, allow: [P.ViewChannel, P.SendMessages, P.ReadMessageHistory, P.AttachFiles, P.EmbedLinks] },
+        { id: guild.ownerId, allow: [P.ViewChannel, P.SendMessages, P.ReadMessageHistory] },
+        ...adminRoles.map(role => ({ id: role.id, allow: [P.ViewChannel, P.SendMessages, P.ReadMessageHistory] })),
       ],
       reason: '管理者によるBot初期設定',
     });
