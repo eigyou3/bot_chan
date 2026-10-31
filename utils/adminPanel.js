@@ -88,7 +88,7 @@ async function handle(i,client){
   if(!(i.isButton() || i.isChannelSelectMenu() || i.isRoleSelectMenu() || i.isStringSelectMenu() || i.isModalSubmit()) || !i.customId.startsWith(PREFIX)) return false;
   if(!allowed(i)) {await i.reply({content:'この操作は #bot-config のサーバー管理者専用です。',flags:MessageFlags.Ephemeral});return true;}
   const id=i.customId.slice(PREFIX.length);
-  if(['vcrmenu','vcron','vcroff','alarmmenu','alarmchannel','alarmselected','alarmremove','alarmdelete'].includes(id)||id.startsWith('alarmform_')){await require('./panelActivity').handle(i);return true;}
+  if(['bumpmenu','bumphere','bumpchannel','bumpselected','vcrmenu','vcron','vcroff','alarmmenu','alarmchannel','alarmselected','alarmremove','alarmdelete'].includes(id)||id.startsWith('alarmform_')){await require('./panelActivity').handle(i);return true;}
   if(id==='activity'){
     const cfg=st.get(i.guildId),n=cfg.inactive?.months||cfg.inactiveMonths||3;
     await i.reply({content:'**📊 活動管理**\\n非アクティブ判定：'+n+'か月\\n自動キック：'+(cfg.inactive?.enabled?'ON':'OFF')+'\\n判定期間を変更すると、その日からあらためて経過期間を数えます。',components:[row(btn('vcrmenu','VCランキング'),btn('alarmmenu','アラーム')),row(btn('inactivemonths','非アクティブ判定月数'))],flags:MessageFlags.Ephemeral});return true;
@@ -110,7 +110,7 @@ async function handle(i,client){
   if(id.startsWith('ann')){await require('./panelAnnounce').handle(i,client);return true;}
   if(id==='notifications'){
     const d=st.get(i.guildId);
-    await i.reply({content:'**🔔 通知設定**\\nVC通知先：'+(d.vc?'<#'+d.vc+'>':'未設定')+'\\nアナウンスは投稿先を選んで作成できます。',components:[row(btn('vcchannel','VC通知先を設定'),btn('annopen','アナウンス作成'))],flags:MessageFlags.Ephemeral});return true;
+    await i.reply({content:'**🔔 通知設定**\\nVC通知先：'+(d.vc?'<#'+d.vc+'>':'未設定')+'\\nアナウンスは投稿先を選んで作成できます。',components:[row(btn('vcchannel','VC通知先を設定'),btn('annopen','アナウンス作成')),row(btn('bumpmenu','Bump通知'))],flags:MessageFlags.Ephemeral});return true;
   }
   if(id==='vcchannel' || id==='annchannel'){
     await i.reply({content:'テキストチャンネルを選んでください。',components:[row(new ChannelSelectMenuBuilder().setCustomId(PREFIX+'select_'+(id==='vcchannel'?'vc':'annchannel')).setPlaceholder('通知先チャンネル').addChannelTypes(ChannelType.GuildText))],flags:MessageFlags.Ephemeral});return true;
