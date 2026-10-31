@@ -10,6 +10,7 @@ const dict = require('../utils/dict');
 const off = require('../utils/off');
 const gn = require('../utils/gnews');
 const inactive = require('../utils/inactive');
+const adminPanel = require('../utils/adminPanel');
 
 module.exports = {
   name: 'interactionCreate',
@@ -17,10 +18,20 @@ module.exports = {
     if (interaction.isChatInputCommand()) {
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
-      if (interaction.guild && !['setup', 'setgenshin', 'help', 'servers'].includes(interaction.commandName) && !st.findCh(interaction.guild)) {
-        return interaction.reply({ content: '⚠️ このBotは設定保存用の #bot-config が必要です。サーバー管理者が `/setup` を実行してください。原神サーバーとして登録する場合は `/setgenshin` でも準備できます。使い方は `/help`。', allowedMentions: { parse: [] } });
+      if (interaction.guild && !['setgenshin', 'help', 'servers'].includes(interaction.commandName) && !st.findCh(interaction.guild)) {
+        return interaction.reply({ content: '⚠️ このBotは設定保存用の #bot-config が必要です。Bot導入時に自動作成されます。作成されていない場合はサーバー管理者にBotの「チャンネルの管理」権限を確認してもらってください。使い方は `/help`。', allowedMentions: { parse: [] } });
       }
       try { await command.execute(interaction, client); } catch (error) { console.error(error); }
+      return;
+    }
+
+    if (interaction.isButton() && interaction.customId?.startsWith('cfg_')) {
+      try { await adminPanel.handle(interaction, client); } catch (e) {
+        console.error('管理パネルエラー:', e);
+        const msg = {content:'管理パネルの操作に失敗しました。',components:[]};
+        if(interaction.deferred || interaction.replied) await interaction.editReply(msg).catch(()=>null);
+        else await interaction.reply({...msg,ephemeral:true}).catch(()=>null);
+      }
       return;
     }
 
