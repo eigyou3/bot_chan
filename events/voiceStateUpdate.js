@@ -1,6 +1,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const st = require('../utils/store');
 const vr = require('../utils/vcrank');
+const analytics = require('../utils/analyticsCollector');
 const inactive = require('../utils/inactive');
 
 module.exports = {
@@ -8,6 +9,7 @@ module.exports = {
   async execute(oldState, newState, client) {
     const activityMember = newState.member || oldState.member;
     if (activityMember && oldState.channelId !== newState.channelId) inactive.record(newState.guild, activityMember.user);
+    if(oldState.channelId!==newState.channelId) analytics.voiceChanged(newState.guild);
     // ランキング集計
     await vr.onVoice(oldState, newState).catch(e => console.error('VC集計エラー:', e.message));
 

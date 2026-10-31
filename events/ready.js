@@ -7,6 +7,7 @@ const bump = require('../utils/bump');
 const alarm = require('../utils/alarm');
 const inactive = require('../utils/inactive');
 const { syncAll } = require('../utils/registerCommands');
+const analytics = require('../utils/analyticsCollector');
 
 module.exports = {
   name: 'clientReady',
@@ -23,6 +24,8 @@ module.exports = {
       console.error('コマンド登録エラー:', e);
     }
 
+    analytics.initialize(client);
+    setInterval(()=>analytics.tick(client),60000);
     await vr.init(client).catch(e => console.error('VC集計の初期化エラー:', e.message));
     await inactive.tick(client);
     setInterval(() => inactive.tick(client), 5 * 60000);
