@@ -30,7 +30,7 @@ async function names() {
     const [c0, c1, l0, l1, pf, relicData] = await Promise.all(['characters.json', 'gi/avatars.json', 'loc.json', 'gi/locs.json', 'pfps.json', 'gi/relics.json'].map(get));
     relicSets = relicData.Sets || {};
     relicItems = relicData.Items || {};
-    locs = Object.fromEntries(['ja','en','zh-CN','zh-TW'].map(lang => { const code = {'zh-CN':'zh-CN','zh-TW':'zh-TW'}[lang] || lang; return [lang, { ...(l0[code] || {}), ...(l1[code] || {}) }]; }));
+    locs = Object.fromEntries(['ja','en','zh-CN','zh-TW'].map(lang => { const code = {'zh-CN':'zh-cn','zh-TW':'zh-tw'}[lang] || lang; return [lang, { ...(l0[code] || {}), ...(l1[code] || {}) }]; }));
     ja = locs.ja;
     const c = { ...c0 };
     const cut = s => (s || '').replace(/^\/ui\//, '').replace(/\.png$/, '');
