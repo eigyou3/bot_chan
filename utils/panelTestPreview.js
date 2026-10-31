@@ -56,6 +56,13 @@ function render(page='home',mode='pending',guildId=null) {
    const d=guildId ? st.get(guildId) : {};
    const target=d.vc ? '<#'+d.vc+'>' : '未設定';
    container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**VC参加通知**\n-# 通知先：'+target+'\n\n**VCランキング**\n-# 集計とランキング投稿の管理\n\n**Bump通知**\n-# リマインドと通知先の管理'));
+  }else if(page==='vc'){
+   const d=guildId ? st.get(guildId) : {};
+   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**現在の通知先**\n'+(d.vc?'<#'+d.vc+'>':'未設定')+'\n\n-# 本番ではここから通知先を変更できます。'));
+  }else if(page==='ranking'){
+   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**VCランキング**\nランキングのON/OFFと投稿先を設定します。\n\n-# 本番では設定を変更できます。'));
+  }else if(page==='bump'){
+   container.addTextDisplayComponents(new TextDisplayBuilder().setContent('**Bump通知**\nリマインドの通知先と通知方法を設定します。\n\n-# 本番では設定を変更できます。'));
   }else container.addTextDisplayComponents(new TextDisplayBuilder().setContent(screen[page][1]));
   const next=page==='notifications'?[['vc','🔊 VC参加通知','参加通知を送るチャンネル'],['ranking','🏆 VCランキング','ランキングのON/OFF・投稿先'],['bump','🔔 Bump通知','通知先・リマインド設定']]:
     page==='members'?[['inactive','非アクティブ管理']]:[];
