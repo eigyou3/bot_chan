@@ -87,6 +87,7 @@ async function handle(i,client){
   if(!(i.isButton() || i.isChannelSelectMenu() || i.isRoleSelectMenu()) || !i.customId.startsWith(PREFIX)) return false;
   if(!allowed(i)) {await i.reply({content:'この操作は #bot-config のサーバー管理者専用です。',flags:MessageFlags.Ephemeral});return true;}
   const id=i.customId.slice(PREFIX.length);
+  if(id==='permhide'){await require('./permissionChecklist').hide(i);return true;}
   if(id.startsWith('ann')){await require('./panelAnnounce').handle(i,client);return true;}
   if(id==='notifications'){
     const d=st.get(i.guildId);
